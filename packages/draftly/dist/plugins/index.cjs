@@ -1,76 +1,63 @@
 'use strict';
 
-var chunkPNNYG5V6_cjs = require('../chunk-PNNYG5V6.cjs');
-require('../chunk-EQUQHE2E.cjs');
-require('../chunk-7HUCJHMI.cjs');
-require('../chunk-KTTVXTSR.cjs');
-require('../chunk-W75QUUQC.cjs');
+var chunkKNRUB7XG_cjs = require('../chunk-KNRUB7XG.cjs');
+require('../chunk-EWK52CV4.cjs');
+require('../chunk-X6JQRPQN.cjs');
+require('../chunk-XQHP5MJD.cjs');
+require('../chunk-FAW6KSSV.cjs');
+require('../chunk-3TJPHTNQ.cjs');
+require('../chunk-PULMPDQL.cjs');
+require('../chunk-QFIW5FJA.cjs');
 
 
 
 Object.defineProperty(exports, "CodePlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.CodePlugin; }
-});
-Object.defineProperty(exports, "EmojiPlugin", {
-  enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.EmojiPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.CodePlugin; }
 });
 Object.defineProperty(exports, "HRPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.HRPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.HRPlugin; }
 });
 Object.defineProperty(exports, "HTMLPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.HTMLPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.HTMLPlugin; }
 });
 Object.defineProperty(exports, "HeadingPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.HeadingPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.HeadingPlugin; }
 });
 Object.defineProperty(exports, "ImagePlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.ImagePlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.ImagePlugin; }
 });
 Object.defineProperty(exports, "InlinePlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.InlinePlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.InlinePlugin; }
 });
 Object.defineProperty(exports, "LinkPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.LinkPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.LinkPlugin; }
 });
 Object.defineProperty(exports, "ListPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.ListPlugin; }
-});
-Object.defineProperty(exports, "MathPlugin", {
-  enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.MathPlugin; }
-});
-Object.defineProperty(exports, "MermaidPlugin", {
-  enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.MermaidPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.ListPlugin; }
 });
 Object.defineProperty(exports, "ParagraphPlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.ParagraphPlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.ParagraphPlugin; }
 });
 Object.defineProperty(exports, "QuotePlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.QuotePlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.QuotePlugin; }
 });
 Object.defineProperty(exports, "TablePlugin", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.TablePlugin; }
+  get: function () { return chunkKNRUB7XG_cjs.TablePlugin; }
 });
-Object.defineProperty(exports, "allPlugins", {
+Object.defineProperty(exports, "createEssentialPlugins", {
   enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.allPlugins; }
-});
-Object.defineProperty(exports, "essentialPlugins", {
-  enumerable: true,
-  get: function () { return chunkPNNYG5V6_cjs.essentialPlugins; }
+  get: function () { return chunkKNRUB7XG_cjs.createEssentialPlugins; }
 });
 //# sourceMappingURL=index.cjs.map
 //# sourceMappingURL=index.cjs.map

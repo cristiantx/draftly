@@ -1,10 +1,11 @@
 import * as _lezer_markdown from '@lezer/markdown';
 import { MarkdownConfig } from '@lezer/markdown';
-import { d as DraftlyPlugin, T as ThemeEnum } from '../draftly-BBL-AdOl.cjs';
+import { e as DraftlyPlugin, T as ThemeEnum } from '../draftly-CnHU7TMl.cjs';
 import * as _lezer_highlight from '@lezer/highlight';
 import * as _codemirror_state from '@codemirror/state';
 import * as _codemirror_language from '@codemirror/language';
 import { SyntaxNode } from '@lezer/common';
+export { e as escapeHtml } from '../escape-html-Dmalb2FV.cjs';
 import '@codemirror/view';
 import 'style-mod';
 
@@ -40,6 +41,22 @@ interface PreviewConfig {
     wrapperTag?: "article" | "div" | "section";
     /** Whether to sanitize HTML blocks (default: true) */
     sanitize?: boolean;
+    /**
+     * Sanitizer to use instead of the bundled DOMPurify.
+     *
+     * **Required for server-side rendering.** DOMPurify needs a DOM, so outside a browser
+     * the bundled sanitizer cannot run and `sanitize: true` protects nothing. Draftly does
+     * not depend on jsdom — it is heavy, and forcing it on every consumer to serve the
+     * server-rendering subset is the wrong trade — so supply your own here:
+     *
+     * ```ts
+     * import createDOMPurify from "isomorphic-dompurify";
+     * preview(md, { sanitizer: (html) => createDOMPurify.sanitize(html) });
+     * ```
+     *
+     * Ignored when `sanitize` is `false`.
+     */
+    sanitizer?: (html: string) => string;
     /** Theme to use */
     theme?: ThemeEnum;
     /** CodeMirror syntax theme input used for static preview highlighting */
@@ -111,13 +128,17 @@ declare function generateCSS(config?: GenerateCSSConfig): string;
 
 /**
  * Extract syntax highlight CSS from resolved CodeMirror HighlightStyle modules.
+ *
+ * The rules are scoped to `wrapperClass` before being returned. CodeMirror emits
+ * bare `.tok-*` selectors, and preview CSS lands in the host page's global
+ * stylesheet — unscoped, the preview's syntax theme also restyles the editor.
+ *
+ * @param syntaxTheme - Highlight style(s) to extract rules from
+ * @param wrapperClass - Preview wrapper class every rule is scoped under
+ * @returns Scoped CSS, or an empty string when there is nothing to emit
  */
-declare function generateSyntaxThemeCSS(syntaxTheme: SyntaxThemeInput | SyntaxThemeInput[] | undefined, _wrapperClass: string): string;
+declare function generateSyntaxThemeCSS(syntaxTheme: SyntaxThemeInput | SyntaxThemeInput[] | undefined, wrapperClass: string): string;
 
-/**
- * Escape HTML special characters
- */
-declare function escapeHtml(text: string): string;
 /**
  * Default node renderers for all markdown node types
  */
@@ -136,9 +157,22 @@ declare class PreviewRenderer {
     private renderers;
     private ctx;
     private nodeToPlugins;
-    constructor(doc: string, plugins: DraftlyPlugin[] | undefined, markdown: MarkdownConfig[], theme?: ThemeEnum, sanitize?: boolean, syntaxTheme?: SyntaxThemeInput | SyntaxThemeInput[]);
+    constructor(doc: string, plugins: DraftlyPlugin[] | undefined, markdown: MarkdownConfig[], theme?: ThemeEnum, sanitize?: boolean, syntaxTheme?: SyntaxThemeInput | SyntaxThemeInput[], sanitizer?: (html: string) => string);
     /**
-     * Build a map from node names to plugins that handle them
+     * Build a map from node names to the plugins that handle them.
+     *
+     * Candidates for a node are ordered by **descending `decorationPriority`**, so the
+     * plugin that would win visually in the editor is the one consulted first here.
+     * `renderNode` takes the first non-null result, so highest priority wins.
+     *
+     * That direction is the inverse of the editor's sort, and deliberately so: the editor
+     * sorts ascending because it applies *every* plugin and later decorations layer over
+     * earlier ones. The two surfaces have different composition models — layering versus
+     * precedence — and this is what makes one priority number mean the same thing in both.
+     * Before this, preview resolved conflicts by whatever order the consumer happened to
+     * write their plugin array in.
+     *
+     * @returns Node name to prioritised candidate list
      */
     private buildNodePluginMap;
     /**
@@ -155,4 +189,4 @@ declare class PreviewRenderer {
     private renderChildren;
 }
 
-export { type GenerateCSSConfig, type NodeRenderer, type NodeRendererMap, type PreviewConfig, type PreviewContext, PreviewRenderer, type SyntaxThemeInput, defaultRenderers, escapeHtml, generateCSS, generateSyntaxThemeCSS, preview };
+export { type GenerateCSSConfig, type NodeRenderer, type NodeRendererMap, type PreviewConfig, type PreviewContext, PreviewRenderer, type SyntaxThemeInput, defaultRenderers, generateCSS, generateSyntaxThemeCSS, preview };

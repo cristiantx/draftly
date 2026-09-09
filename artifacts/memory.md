@@ -1,5 +1,7 @@
 # Agent Memory
 
+> Last verified: 2026-09-09 · commit `754465b` plus final rebuilt interaction worktree.
+
 > Cross-session memory for agents working on Draftly.
 > Append newest sessions at the top of the log. Keep entries short and durable — record
 > things a future agent could not cheaply re-derive from the code or git history.
@@ -57,8 +59,9 @@ Distilled from all sessions. Highest-value context, kept short deliberately.
   `syntaxTreeAvailable(state, view.viewport.to)`, **not** matching Lezer's error messages;
   message text is not stable across versions. If a decoration is missing and nothing was
   logged, the failure is not an exception — look at the logic.
-- **`Decoration.replace` must never span a newline.** Clamp to `line.to`; CodeMirror
-  throws otherwise. Canonical clamp: `heading-plugin.ts:104`.
+- **View-plugin replacement decorations must not span newlines.** Clamp that path to
+  `line.to`. Direct decorations supplied by a `StateField` may replace multiline ranges;
+  Mermaid uses this separate path so CodeMirror knows block heights before layout.
 - **`ThemeEnum.AUTO` does not detect the system theme.** It applies the `default` layer
   only. The name over-promises.
 - **`sanitize: true` still guarantees nothing *on the server* unless `sanitizer` is
@@ -253,6 +256,32 @@ Unresolved. Do not act on these unilaterally — raise them when the topic comes
 ---
 
 ## Session log
+
+### Session 2026-09-09 — Pluma interaction integration
+
+**Decisions:** Pluma preserves table source on open and ordinary edits by opting out of
+both normalization triggers; the library defaults remain enabled. Table pointer mapping
+must resolve a source position and leave caret placement and drag selection to CodeMirror.
+Table toolbar actions use semantic button clicks so keyboard activation follows the same path.
+
+**Learned:** Mermaid block replacements must be supplied directly by a `StateField`, not
+through a view plugin. Cache parsed ranges until document/tree changes; selection changes
+only change decorations. Asynchronous SVG completion requests measurement to refresh layout.
+Reconfiguration must destroy removed plugin instances and initialize added instances even
+when the CodeMirror view itself survives.
+
+**Packaging:** Keep regenerated `packages/draftly/dist` committed for Pluma's Git dependency;
+source-only fixes do not update that consumer. See the
+[completed interaction task](./tasks/completed/C-031-pluma-interactions.md) for integration and verification.
+
+**Verification:** All 27 integrated Chromium/Electron tests passed against the final rebuild;
+fork typecheck/build passed. Changed-file Biome checks have no formatting errors and retain
+25 pre-existing style warnings. Publishing, Pluma's final pin, and packaged-app/full final
+validation remain release follow-ups.
+
+**Final contract details:** Public entry points export table/Mermaid option types. Empty
+table cells map padding clicks to the source midpoint, avoiding delimiter insertion. Async
+Mermaid errors reach `DraftlyConfig.onPluginError`; do not leave that failure path console-only.
 
 ### Session 2026-08-18 — migrating the logits fork
 

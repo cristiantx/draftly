@@ -229,8 +229,22 @@ class draftlyViewPluginClass {
   }
 
   update(update: ViewUpdate) {
-    // Update plugins list if facet changed
-    this.plugins = update.view.state.facet(DraftlyPluginsFacet);
+    const nextPlugins = update.state.facet(DraftlyPluginsFacet);
+    if (nextPlugins !== this.plugins) {
+      for (const plugin of this.plugins) {
+        if (!nextPlugins.includes(plugin)) {
+          try {
+            plugin.onViewDestroy(update.view);
+          } catch {
+            /* Continue teardown. */
+          }
+        }
+      }
+      for (const plugin of nextPlugins) {
+        if (!this.plugins.includes(plugin)) plugin.onViewReady(update.view);
+      }
+      this.plugins = nextPlugins;
+    }
     this.onNodesChange = update.view.state.facet(draftlyOnNodesChangeFacet);
 
     // Notify plugins of the update
@@ -242,7 +256,13 @@ class draftlyViewPluginClass {
     // - Document changes
     // - Selection changes (to show/hide syntax markers)
     // - Viewport changes
-    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.viewportChanged ||
+      update.startState.facet(DraftlyPluginsFacet) !== this.plugins ||
+      syntaxTree(update.startState) !== syntaxTree(update.state)
+    ) {
       this.decorations = buildDecorations(update.view, this.plugins);
 
       // Call onNodesChange callback

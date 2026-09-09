@@ -1,4 +1,5 @@
-export { DecorationPlugin, DraftlyPlugin, SyntaxPlugin, draftly, draftlyBaseTheme, markdownResetExtension } from '../chunk-UCHBDJ4R.js';
-export { ThemeEnum, createTheme, cursorInRange, deepMerge, fixSelector, flattenThemeStyles, selectionOverlapsRange, toggleMarkdownStyle } from '../chunk-TD3L5C45.js';
+export { DecorationPlugin, DraftlyPlugin, SyntaxPlugin, collectShortcuts, draftly } from '../chunk-7XQEHFZX.js';
+export { ThemeEnum, createTheme, cursorInRange, deepMerge, draftlyBaseTheme, fixSelector, flattenThemeStyles, markdownResetExtension, resolveBaseStyles, resolveEditorBaseStyles, selectionOverlapsRange, toggleMarkdownStyle } from '../chunk-XRXGYUPJ.js';
+import '../chunk-ONHEBAB4.js';
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

@@ -14,6 +14,7 @@ import {
 import { ThemeEnum } from "../editor/utils";
 import { PreviewRenderer } from "../preview/renderer";
 import { displayWidth } from "../lib/display-width";
+import { tablePointerSelection } from "./table/pointer-selection";
 
 type Alignment = "left" | "center" | "right";
 type TableRowKind = "header" | "body";
@@ -113,17 +114,20 @@ class TableControlsWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const anchor = document.createElement("span");
     anchor.className = "cm-draftly-table-controls-anchor";
-    anchor.setAttribute("aria-hidden", "true");
+    anchor.setAttribute("role", "group");
+    anchor.setAttribute("aria-label", "Table controls");
 
     const rightButton = this.createButton("Add column", "cm-draftly-table-control cm-draftly-table-control-column");
-    rightButton.addEventListener("mousedown", (event) => {
+    rightButton.addEventListener("mousedown", (event) => event.preventDefault());
+    rightButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
       this.onAddColumn(view);
     });
 
     const bottomButton = this.createButton("Add row", "cm-draftly-table-control cm-draftly-table-control-row");
-    bottomButton.addEventListener("mousedown", (event) => {
+    bottomButton.addEventListener("mousedown", (event) => event.preventDefault());
+    bottomButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
       this.onAddRow(view);
@@ -133,9 +137,9 @@ class TableControlsWidget extends WidgetType {
     return anchor;
   }
 
-  /** Lets button events bubble through the widget. */
+  /** Native controls own keyboard and pointer activation. */
   override ignoreEvent(): boolean {
-    return false;
+    return true;
   }
 
   /** Builds a single control button with the provided label and class. */
@@ -143,7 +147,7 @@ class TableControlsWidget extends WidgetType {
     const button = document.createElement("button");
     button.type = "button";
     button.className = className;
-    button.setAttribute("tabindex", "-1");
+    button.setAttribute("tabindex", "0");
     button.setAttribute("aria-label", label);
     button.textContent = "+";
     return button;
@@ -744,7 +748,21 @@ function getCellDecoration(isHeader: boolean, alignment: Alignment, isLastCell: 
   return cellDecorations[key];
 }
 
+/** Controls automatic source rewrites independently from explicit table commands. */
+export interface TablePluginOptions {
+  /** Preserve the historical normalization on mount unless disabled by the host. */
+  normalizeOnOpen?: boolean;
+  /** Insert table spacer lines after document edits unless disabled by the host. */
+  normalizeOnChange?: boolean;
+}
+
+/** Renders and edits GFM tables without changing their source model. */
 export class TablePlugin extends DecorationPlugin {
+  /** @param options Host choices for automatic source formatting. */
+  constructor(private readonly options: TablePluginOptions = {}) {
+    super();
+  }
+
   readonly name = "table";
   readonly version = "2.0.0";
   override decorationPriority = 20;
@@ -792,6 +810,7 @@ export class TablePlugin extends DecorationPlugin {
   override getExtensions(): Extension[] {
     return [
       Prec.highest(keymap.of(this.buildTableKeymap())),
+      tablePointerSelection,
       EditorView.blockWrappers.of((view) => this.computeBlockWrappers(view)),
       EditorView.atomicRanges.of((view) => this.computeAtomicRanges(view)),
       EditorView.domEventHandlers({
@@ -940,7 +959,7 @@ export class TablePlugin extends DecorationPlugin {
 
   /** Schedules an initial normalization pass once the view is ready. */
   override onViewReady(view: EditorView): void {
-    this.scheduleNormalization(view);
+    if (this.options.normalizeOnOpen !== false) this.scheduleNormalization(view);
   }
 
   /** Re-schedules normalization after user-driven document changes. */
@@ -960,7 +979,11 @@ export class TablePlugin extends DecorationPlugin {
   }
 
   override onViewUpdate(update: import("@codemirror/view").ViewUpdate): void {
-    if (update.docChanged && !update.transactions.some((transaction) => transaction.annotation(normalizeAnnotation))) {
+    if (
+      this.options.normalizeOnChange !== false &&
+      update.docChanged &&
+      !update.transactions.some((transaction) => transaction.annotation(normalizeAnnotation))
+    ) {
       this.schedulePadding(update.view);
     }
 
@@ -974,7 +997,14 @@ export class TablePlugin extends DecorationPlugin {
 
   /** Intercepts table-specific DOM key handling before browser defaults run. */
   private handleDomKeydown(view: EditorView, event: KeyboardEvent): boolean {
-    if (event.defaultPrevented || event.isComposing || event.altKey || event.metaKey || event.ctrlKey) {
+    if (
+      (event.target instanceof Element && event.target.closest("button")) ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.altKey ||
+      event.metaKey ||
+      event.ctrlKey
+    ) {
       return false;
     }
 

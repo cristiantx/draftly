@@ -178,8 +178,9 @@ The full list is in [`artifacts/memory.md`](artifacts/memory.md). The ones that 
   Genuine errors are reported via `DraftlyConfig.onPluginError` or a dev-only
   `console.error`, deduplicated per plugin and message. If a decoration does not appear
   and nothing was logged, nothing threw — the bug is in the logic.
-- **`Decoration.replace` must never span a newline.** Clamp to `line.to`. Canonical
-  example: `heading-plugin.ts:104`.
+- **View-plugin replacement decorations cannot span newlines.** Clamp them to
+  `line.to` (see `heading-plugin.ts:104`). Multiline block replacements must be supplied
+  directly by a `StateField`, as Mermaid does, so CodeMirror sees block heights before layout.
 - **Release view-scoped state in `onViewDestroy`.** A plugin instance outlives the view
   that used it; `EditorView` has no public "destroyed" flag, so guard in-flight async work
   with a `WeakSet` as `table-plugin.ts` does. `onUnregister` is deprecated and never called.

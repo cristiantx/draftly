@@ -1,7 +1,10 @@
-export { CodePlugin, EmojiPlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, MathPlugin, MermaidPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, allPlugins, essentialPlugins } from '../chunk-G2FKUGV7.js';
-import '../chunk-UCHBDJ4R.js';
-import '../chunk-65NNRAME.js';
-import '../chunk-HVDMBUET.js';
-import '../chunk-TD3L5C45.js';
+export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins } from '../chunk-HMIW4LDN.js';
+import '../chunk-LB72KTUD.js';
+import '../chunk-QATV5LYI.js';
+import '../chunk-CI47THVM.js';
+import '../chunk-LUQ5Q6D7.js';
+import '../chunk-7XQEHFZX.js';
+import '../chunk-XRXGYUPJ.js';
+import '../chunk-ONHEBAB4.js';
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

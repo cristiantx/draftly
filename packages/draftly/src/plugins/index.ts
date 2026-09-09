@@ -15,7 +15,7 @@ export { HeadingPlugin } from "./heading-plugin";
 export { InlinePlugin } from "./inline-plugin";
 export { LinkPlugin } from "./link-plugin";
 export { ListPlugin } from "./list-plugin";
-export { TablePlugin } from "./table-plugin";
+export { TablePlugin, type TablePluginOptions } from "./table-plugin";
 export { HTMLPlugin } from "./html-plugin";
 export { ImagePlugin } from "./image-plugin";
 export { CodePlugin } from "./code-plugin";

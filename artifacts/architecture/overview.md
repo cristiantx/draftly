@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Last verified: 2026-08-18 · commit `eae4434`
+> Last verified: 2026-09-09 · commit `754465b` plus interaction worktree; runtime verification pending.
 > Breadth-first picture of the system. Follow the links for depth.
 
 ---
@@ -162,8 +162,9 @@ find code that contradicts one.
    recompute it from the syntax tree.
 2. **Decorations retract under the cursor.** Every hiding decoration must be guarded by
    `ctx.selectionOverlapsRange(...)` or `ctx.cursorInRange(...)`.
-3. **`replace` decorations never span a newline.** Clamp to `line.to` — CodeMirror throws
-   otherwise. See `heading-plugin.ts:104` for the canonical clamp.
+3. **View-plugin replacements cannot span newlines.** Clamp to `line.to`; see
+   `heading-plugin.ts:104`. Multiline block replacements must be supplied directly by a
+   `StateField`, as Mermaid does, so their heights are available before viewport layout.
 4. **Decorations must be position-sorted before `RangeSetBuilder`.** Handled centrally in
    `view-plugin.ts`; plugins may push in any order.
 5. **`requiredNodes` is the preview dispatch key.** A plugin with a `renderToHTML()` but

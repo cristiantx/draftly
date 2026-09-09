@@ -1,142 +1,11 @@
-import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
+import { Decoration } from "@codemirror/view";
 import { type DecorationContext, DecorationPlugin } from "../editor/plugin";
 import { createTheme, ThemeEnum } from "../editor";
-import { resolveWidgetRange, shallowEqualRecord } from "../lib/widget-position";
-import { escapeHtml } from "../lib/escape-html";
 import type { SyntaxNode } from "@lezer/common";
 import { tags } from "@lezer/highlight";
 import type { MarkdownConfig, BlockParser, Line, BlockContext } from "@lezer/markdown";
-import mermaid from "mermaid";
-
-/**
- * Whether {@link ensureMermaidInitialized} has run.
- */
-let mermaidInitialized = false;
-
-/**
- * Initialize mermaid with Draftly's defaults, once.
- *
- * Called on first render rather than at module scope. `mermaid.initialize()` on import
- * makes the module unconditionally side-effecting, so a bundler cannot drop mermaid —
- * roughly a megabyte — for a consumer who never writes a diagram.
- */
-function ensureMermaidInitialized(): void {
-  if (mermaidInitialized) return;
-  mermaidInitialized = true;
-
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: "default",
-    suppressErrorRendering: true,
-  });
-}
-
-/**
- * Monotonic counter for mermaid's required per-render element id.
- *
- * Wraps, because mermaid keeps internal state keyed on these ids and the counter used to
- * grow unbounded for the page's lifetime. The window is far larger than the number of
- * renders that can be in flight at once, so wrapping cannot collide in practice.
- */
-let mermaidCounter = 0;
-const MERMAID_ID_WINDOW = 1_000_000;
-
-/**
- * Renders currently in flight, keyed on everything that determines their output.
- *
- * Two widgets showing the same diagram — the split editor and preview panes, a definition
- * repeated in a document, a widget rebuilt while its first render is still running — would
- * otherwise each start their own `mermaid.render()`, which parses, lays out and serializes
- * an SVG in a hidden DOM node. Sharing the promise makes the duplicates free.
- *
- * This is **de-duplication, not a cache**: an entry is removed the moment its render
- * settles, so an edited diagram is never served a stale SVG, and a render that failed is
- * retried by the next caller rather than left as a permanent error.
- */
-const inFlightRenders = new Map<string, Promise<{ svg: string; error: string | null }>>();
-
-/**
- * Render a mermaid diagram, sharing the work with any identical render already running.
- *
- * @param definition - The diagram source, without its fence
- * @param options - Attributes parsed off the fence line, e.g. `theme`
- * @param defaultTheme - Theme to use when the fence does not name one
- * @returns The SVG, or an `error` message; this never rejects
- */
-function renderMermaid(
-  definition: string,
-  options: Record<string, string> = {},
-  defaultTheme = "default"
-): Promise<{ svg: string; error: string | null }> {
-  // Object key order is insertion order, and `parseAttributes` walks the fence line
-  // left to right — so two fences with the same attributes written in a different order
-  // key differently. That costs a redundant render, never a wrong one.
-  const key = `${defaultTheme}\u0000${JSON.stringify(options)}\u0000${definition}`;
-
-  const existing = inFlightRenders.get(key);
-  if (existing) return existing;
-
-  const pending = renderMermaidUncached(definition, options, defaultTheme).finally(() => {
-    // Guard on identity: only retract our own entry, never a later render's.
-    if (inFlightRenders.get(key) === pending) inFlightRenders.delete(key);
-  });
-
-  inFlightRenders.set(key, pending);
-  return pending;
-}
-
-/**
- * Perform one mermaid render. Call {@link renderMermaid} instead — it de-duplicates.
- */
-async function renderMermaidUncached(
-  definition: string,
-  options: Record<string, string> = {},
-  defaultTheme = "default"
-): Promise<{ svg: string; error: string | null }> {
-  try {
-    ensureMermaidInitialized();
-
-    mermaidCounter = (mermaidCounter + 1) % MERMAID_ID_WINDOW;
-    const id = `draftly-mermaid-${mermaidCounter}`;
-    let finalDefinition = definition;
-
-    // transform theme to mermaid config
-    const mermaidConfig: Record<string, string> = {};
-    if (options.theme) {
-      mermaidConfig.theme = options.theme;
-    } else {
-      mermaidConfig.theme = defaultTheme;
-    }
-
-    // If we have config to apply, prepend the directive
-    if (Object.keys(mermaidConfig).length > 0) {
-      const jsonConfig = JSON.stringify(mermaidConfig);
-      // Mermaid directive format: %%{init: { ... }}%%
-      finalDefinition = `%%{init: ${jsonConfig} }%%\n${definition}`;
-    }
-
-    const { svg } = await mermaid.render(id, finalDefinition);
-    return { svg, error: null };
-  } catch (e) {
-    const errorMsg = e instanceof Error ? e.message : "Unknown error";
-    return { svg: "", error: errorMsg };
-  }
-}
-
-/**
- * Helper to parse attributes from fence line
- * Example: ```mermaid theme="dark" scale="2"
- */
-function parseAttributes(fenceLine: string): Record<string, string> {
-  const attributes: Record<string, string> = {};
-  // Match key="value" or key='value'
-  const regex = /(\w+)=["']([^"']*)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(fenceLine)) !== null && match[1] && match[2]) {
-    attributes[match[1]] = match[2];
-  }
-  return attributes;
-}
+import { createMermaidBlocks } from "./mermaid/blocks";
+import { parseAttributes, renderMermaid } from "./mermaid/render";
 
 /**
  * Mark decorations for mermaid syntax elements
@@ -149,100 +18,6 @@ const mermaidMarkDecorations = {
   "mermaid-marker": Decoration.mark({ class: "cm-draftly-mermaid-marker" }),
   "mermaid-hidden": Decoration.mark({ class: "cm-draftly-mermaid-hidden" }),
 };
-
-/**
- * Widget to render mermaid block diagrams
- */
-class MermaidBlockWidget extends WidgetType {
-  constructor(
-    readonly definition: string,
-    readonly attributes: Record<string, string>,
-    readonly defaultTheme: string,
-    readonly from: number,
-    readonly to: number
-  ) {
-    super();
-  }
-
-  /**
-   * Compares **content only**.
-   *
-   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
-   * shift on any edit earlier in the document, so including them made the answer
-   * permanently no -- every diagram below an edit re-ran an async
-   * mermaid.render() on every keystroke, flashing "Rendering diagram…" as it went. The handlers resolve the range from the live DOM instead.
-   */
-  override eq(other: MermaidBlockWidget): boolean {
-    return (
-      other.definition === this.definition &&
-      other.defaultTheme === this.defaultTheme &&
-      shallowEqualRecord(other.attributes, this.attributes)
-    );
-  }
-
-  /**
-   * Set by {@link destroy}. `mermaid.render()` is async and routinely outlives the
-   * element it was started for, so the resolution handler must be able to tell.
-   */
-  private disposed = false;
-
-  override destroy(): void {
-    this.disposed = true;
-  }
-
-  toDOM(view: EditorView) {
-    const div = document.createElement("div");
-    div.className = "cm-draftly-mermaid-rendered";
-    div.style.cursor = "pointer";
-
-    // A rendered SVG has no text alternative of its own, and the diagram source it was
-    // built from is hidden by the decoration. Naming it from the source is the only
-    // description available -- imperfect, but it is the difference between "graphic" and
-    // nothing at all.
-    div.setAttribute("role", "img");
-    div.setAttribute("aria-label", `Mermaid diagram: ${this.definition.replace(/\s+/g, " ").trim().slice(0, 200)}`);
-
-    // Show loading state initially
-    div.innerHTML = `<div class="cm-draftly-mermaid-loading">Rendering diagram…</div>`;
-
-    // Render mermaid asynchronously. Both guards matter: `disposed` catches a widget
-    // CodeMirror told us about, `isConnected` catches an element that left the document
-    // without destroy() being reached.
-    renderMermaid(this.definition, this.attributes, this.defaultTheme).then(({ svg, error }) => {
-      if (this.disposed || !div.isConnected) {
-        return;
-      }
-
-      if (error) {
-        // classList.add, not `className +=` -- the latter accumulates if the element is
-        // ever written to twice.
-        div.classList.add("cm-draftly-mermaid-error");
-        div.setAttribute("role", "alert");
-        div.innerHTML = `<span>[Mermaid Error: ${escapeHtml(error)}]</span>`;
-      } else {
-        div.innerHTML = svg;
-      }
-    });
-
-    // Click handler to select the raw mermaid text
-    div.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const range = resolveWidgetRange(view, div, ["MermaidBlock"]) ?? { from: this.from, to: this.to };
-      view.dispatch({
-        selection: { anchor: range.from, head: range.to },
-        scrollIntoView: true,
-      });
-      view.focus();
-    });
-
-    return div;
-  }
-
-  override ignoreEvent(event: Event) {
-    return event.type !== "click";
-  }
-}
 
 /**
  * Block parser for mermaid blocks:
@@ -317,14 +92,26 @@ const mermaidBlockParser: BlockParser = {
  * - Hide raw definition when cursor is outside the block
  * - Show raw definition with styled markers when cursor is inside
  */
+/** Host choice when activating a rendered diagram; legacy selection is the default. */
+export interface MermaidPluginOptions {
+  /** Select the whole source or place a caret at the start of the diagram body. */
+  activation?: "select" | "caret";
+}
+
+/** Renders Mermaid source using measured block decorations. */
 export class MermaidPlugin extends DecorationPlugin {
   readonly name = "mermaid";
   readonly version = "1.0.0";
   override decorationPriority = 25;
   override readonly requiredNodes = ["MermaidBlock", "MermaidBlockMark"] as const;
 
-  constructor() {
+  constructor(private readonly options: MermaidPluginOptions = {}) {
     super();
+  }
+
+  /** Supplies height-changing decorations before CodeMirror calculates its viewport. */
+  override getExtensions() {
+    return [createMermaidBlocks(this.options.activation ?? "select")];
   }
 
   /**
@@ -352,9 +139,6 @@ export class MermaidPlugin extends DecorationPlugin {
    */
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const config = this.context?.config;
-    const currentTheme = config?.theme === ThemeEnum.DARK ? "dark" : "default";
-
     // Scoped to the viewport: an unbounded walk makes every update -- including a
     // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
     ctx.iterateVisible({
@@ -362,22 +146,10 @@ export class MermaidPlugin extends DecorationPlugin {
         const { from, to, name } = node;
 
         if (name === "MermaidBlock") {
-          const content = view.state.sliceDoc(from, to);
-
-          // Extract mermaid definition (remove ```mermaid and ``` markers)
-          const lines = content.split("\n");
-          const definition = lines
-            .slice(1, -1) // Remove first and last lines (the markers)
-            .join("\n")
-            .trim();
-
-          const docLines = content.split("\n");
-          const fenceLine = docLines[0] || "";
-          const attributes = parseAttributes(fenceLine);
-
           const nodeLineStart = view.state.doc.lineAt(from);
           const nodeLineEnd = view.state.doc.lineAt(to);
           const cursorInRange = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineEnd.to);
+          if (!cursorInRange) return false;
 
           // Calculate line number width for mermaid block
           const totalCodeLines = nodeLineEnd.number - nodeLineStart.number - 1;
@@ -391,7 +163,6 @@ export class MermaidPlugin extends DecorationPlugin {
             const relativeLineNum = codeLineIndex;
 
             decorations.push(mermaidMarkDecorations["mermaid-block"].range(line.from));
-            if (!cursorInRange) decorations.push(mermaidMarkDecorations["mermaid-block-rendered"].range(line.from));
 
             if (i === nodeLineStart.number)
               decorations.push(mermaidMarkDecorations["mermaid-block-start"].range(line.from));
@@ -416,15 +187,6 @@ export class MermaidPlugin extends DecorationPlugin {
             }
           }
 
-          // Always add the rendered widget below the block
-          decorations.push(
-            Decoration.widget({
-              widget: new MermaidBlockWidget(definition, attributes, currentTheme, from, to),
-              side: 1,
-              block: false,
-            }).range(to)
-          );
-
           if (cursorInRange) {
             // Cursor in range: show raw definition with styled markers
             for (let child = node.node.firstChild; child; child = child.nextSibling) {
@@ -432,9 +194,6 @@ export class MermaidPlugin extends DecorationPlugin {
                 decorations.push(mermaidMarkDecorations["mermaid-marker"].range(child.from, child.to));
               }
             }
-          } else {
-            // Cursor out of range: hide the raw text
-            decorations.push(mermaidMarkDecorations["mermaid-hidden"].range(from, to));
           }
         }
       },

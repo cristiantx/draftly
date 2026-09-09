@@ -1,17 +1,19 @@
-import { d as DraftlyPlugin, T as ThemeEnum, f as ThemeStyle, a as DecorationPlugin, D as DecorationContext, e as PluginContext } from '../draftly-BBL-AdOl.js';
+import { e as DraftlyPlugin, T as ThemeEnum, g as ThemeStyle, D as DecorationContext, a as DecorationPlugin, b as DescribedKeyBinding, f as PluginContext } from '../draftly-CnHU7TMl.js';
 import { SyntaxNode } from '@lezer/common';
 import { Extension } from '@codemirror/state';
-import * as _codemirror_view from '@codemirror/view';
-import { KeyBinding, EditorView } from '@codemirror/view';
 import { MarkdownConfig } from '@lezer/markdown';
-import * as _lezer_highlight from '@lezer/highlight';
+import * as _codemirror_view from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 import { Highlighter } from '@lezer/highlight';
 import 'style-mod';
 
 /**
- * ParagraphPlugin - Adds top and bottom padding to paragraphs in preview
+ * ParagraphPlugin - Applies paragraph spacing on both surfaces
  *
- * Applies visual spacing to markdown paragraphs for better readability
+ * The preview wraps paragraphs in `<p class="cm-draftly-paragraph">`, but the
+ * editor has no element to hang that class on — the document is a flat list of
+ * lines. Marking each line of a paragraph with the same class is what keeps the
+ * two surfaces spaced alike.
  */
 declare class ParagraphPlugin extends DraftlyPlugin {
     readonly name = "paragraph";
@@ -21,6 +23,13 @@ declare class ParagraphPlugin extends DraftlyPlugin {
      * Plugin theme for preview styling
      */
     get theme(): (theme: ThemeEnum) => ThemeStyle;
+    /**
+     * Pad the first and last line of every visible paragraph.
+     *
+     * @param ctx - Decoration context
+     * @returns Nothing; decorations are pushed into `ctx.decorations`
+     */
+    buildDecorations(ctx: DecorationContext): void;
     renderToHTML(node: SyntaxNode, children: string): string | null;
 }
 
@@ -79,7 +88,7 @@ declare class InlinePlugin extends DecorationPlugin {
     /**
      * Keyboard shortcuts for inline formatting
      */
-    getKeymap(): KeyBinding[];
+    getKeymap(): DescribedKeyBinding[];
     /**
      * Intercepts inline marker typing to wrap selected text.
      *
@@ -127,7 +136,7 @@ declare class LinkPlugin extends DecorationPlugin {
     /**
      * Keyboard shortcuts for link formatting
      */
-    getKeymap(): KeyBinding[];
+    getKeymap(): DescribedKeyBinding[];
     /**
      * URL regex pattern
      */
@@ -171,7 +180,18 @@ declare class ListPlugin extends DecorationPlugin {
     /**
      * Keyboard shortcuts for list formatting
      */
-    getKeymap(): KeyBinding[];
+    getKeymap(): DescribedKeyBinding[];
+    /**
+     * Toggle the checked state of every task on the selected lines.
+     *
+     * Mirrors what clicking the checkbox does, for every line the selection touches.
+     * Mixed selections are normalised to checked, matching how checkbox groups behave
+     * elsewhere: if anything is unchecked, check everything; otherwise uncheck everything.
+     *
+     * @param view - The editor view
+     * @returns `true` if any task was toggled, so the keymap can fall through otherwise
+     */
+    private toggleTaskOnLines;
     /**
      * Toggle list marker on current line or selected lines
      */
@@ -196,7 +216,18 @@ interface PreviewContextLike {
     sliceDoc(from: number, to: number): string;
     sanitize(html: string): string;
 }
+/** Controls automatic source rewrites independently from explicit table commands. */
+interface TablePluginOptions {
+    /** Preserve the historical normalization on mount unless disabled by the host. */
+    normalizeOnOpen?: boolean;
+    /** Insert table spacer lines after document edits unless disabled by the host. */
+    normalizeOnChange?: boolean;
+}
+/** Renders and edits GFM tables without changing their source model. */
 declare class TablePlugin extends DecorationPlugin {
+    private readonly options;
+    /** @param options Host choices for automatic source formatting. */
+    constructor(options?: TablePluginOptions);
     readonly name = "table";
     readonly version = "2.0.0";
     decorationPriority: number;
@@ -205,6 +236,14 @@ declare class TablePlugin extends DecorationPlugin {
     private pendingNormalizationView;
     private pendingPaddingView;
     private pendingSelectionRepairView;
+    /**
+     * Set of views CodeMirror has torn down.
+     *
+     * `EditorView` exposes no public "destroyed" flag, so a queued microtask cannot ask the
+     * view whether it is still alive. Weak, so an entry disappears with the view rather
+     * than becoming its own leak.
+     */
+    private readonly destroyedViews;
     /** Stores the editor config for preview rendering and shared behavior. */
     onRegister(context: PluginContext): void;
     /** Exposes the plugin theme used for editor and preview styling. */
@@ -213,17 +252,46 @@ declare class TablePlugin extends DecorationPlugin {
     getMarkdownConfig(): MarkdownConfig;
     /** Registers block wrappers and atomic ranges for the table UI. */
     getExtensions(): Extension[];
-    /** Provides the table-specific keyboard shortcuts and navigation. */
-    getKeymap(): KeyBinding[];
+    /**
+     * Nothing to register here: the table's bindings rebind keys the editor already
+     * uses, so they go in at `Prec.highest()` via {@link buildTableKeymap} and each
+     * one declines unless the cursor is actually in a table.
+     */
+    getKeymap(): DescribedKeyBinding[];
+    /**
+     * Documented separately from {@link getKeymap} because these bindings are
+     * registered through the precedence-wrapped extension rather than the plugin
+     * keymap, and a user still needs to be able to discover them.
+     *
+     * @returns The table shortcuts, all scoped to being inside a table
+     */
+    getShortcuts(): DescribedKeyBinding[];
     /** Builds the high-priority key bindings used inside tables. */
     private buildTableKeymap;
     /** Schedules an initial normalization pass once the view is ready. */
     onViewReady(view: EditorView): void;
     /** Re-schedules normalization after user-driven document changes. */
+    /**
+     * Releases everything scoped to a destroyed view.
+     *
+     * Clearing the pending fields drops the strong reference; recording the view as
+     * destroyed makes any microtask that is already queued bail rather than dispatching
+     * into a dead editor.
+     */
+    onViewDestroy(view: EditorView): void;
     onViewUpdate(update: _codemirror_view.ViewUpdate): void;
     /** Intercepts table-specific DOM key handling before browser defaults run. */
     private handleDomKeydown;
-    /** Builds the visual table decorations for every parsed table block. */
+    /**
+     * Builds the visual table decorations for every parsed table block in the viewport.
+     *
+     * Scoped to `ctx.iterateVisible`, unlike `computeBlockWrappers` and
+     * `computeAtomicRanges` below, which stay document-wide deliberately — they feed
+     * CodeMirror facets rather than the decoration set, and a wrapper or atomic range that
+     * disappears when a table scrolls out of view would break layout and cursor motion.
+     * A `Table` node straddling the viewport edge is still entered in full, so a partly
+     * visible table decorates correctly.
+     */
     buildDecorations(ctx: DecorationContext): void;
     /** Renders the full table node to semantic preview HTML. */
     renderToHTML(node: SyntaxNode, _children: string, ctx: PreviewContextLike): Promise<string | null>;
@@ -292,12 +360,30 @@ declare class HTMLPlugin extends DecorationPlugin {
     readonly name = "html";
     readonly version = "1.0.0";
     decorationPriority: number;
+    readonly requiredNodes: readonly ["HTMLBlock", "HTMLTag", "Comment", "CommentBlock"];
     constructor();
     /**
      * Plugin theme
      */
     get theme(): (theme: ThemeEnum) => ThemeStyle;
     buildDecorations(ctx: DecorationContext): void;
+    /**
+     * Render raw HTML nodes to preview HTML.
+     *
+     * Without this the nodes reached the renderer's leaf fallback and were emitted
+     * verbatim, so `<script>alert(1)</script>` written in a document became a live script
+     * tag in the output regardless of the `sanitize` setting. This is the parity fix for
+     * `HTMLPreviewWidget`, which has always sanitized on the editor surface.
+     *
+     * @param node - The syntax node to render
+     * @param _children - Unused; HTML nodes are leaves as far as the markdown tree is concerned
+     * @param ctx - Preview context, for `sliceDoc` and `sanitize`
+     * @returns HTML to emit, or `null` to decline
+     */
+    renderToHTML(node: SyntaxNode, _children: string, ctx: {
+        sliceDoc(from: number, to: number): string;
+        sanitize(html: string): string;
+    }): string | null;
 }
 
 /**
@@ -322,7 +408,7 @@ declare class ImagePlugin extends DecorationPlugin {
     /**
      * Keyboard shortcuts for image formatting
      */
-    getKeymap(): KeyBinding[];
+    getKeymap(): DescribedKeyBinding[];
     /**
      * URL regex pattern
      */
@@ -347,97 +433,6 @@ declare class ImagePlugin extends DecorationPlugin {
         sliceDoc(from: number, to: number): string;
         sanitize(html: string): string;
     }): string | null;
-}
-
-/**
- * MathPlugin - Renders LaTeX math expressions using KaTeX
- *
- * Supports:
- * - Inline math: $E = mc^2$
- * - Block math (display mode):
- *   $$
- *   \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
- *   $$
- *
- * Behavior:
- * - Inline math: Show rendered output when cursor outside, raw LaTeX when inside
- * - Block math: Always show rendered output below, hide raw when cursor outside (like ImagePlugin)
- */
-declare class MathPlugin extends DecorationPlugin {
-    readonly name = "math";
-    readonly version = "1.0.0";
-    decorationPriority: number;
-    readonly requiredNodes: readonly ["InlineMath", "MathBlock", "InlineMathMark", "MathBlockMark"];
-    constructor();
-    /**
-     * Plugin theme
-     */
-    get theme(): (theme: ThemeEnum) => ThemeStyle;
-    /**
-     * Intercepts dollar typing to wrap selected text as inline math.
-     *
-     * If user types '$' while text is selected, wraps each selected range
-     * with single dollars (selected -> $selected$).
-     */
-    getExtensions(): Extension[];
-    /**
-     * Return markdown parser extensions for math syntax
-     */
-    getMarkdownConfig(): MarkdownConfig;
-    /**
-     * Build decorations for math expressions
-     */
-    buildDecorations(ctx: DecorationContext): void;
-    /**
-     * Render math to HTML for preview mode
-     */
-    renderToHTML(node: SyntaxNode, _children: string, ctx: {
-        sliceDoc(from: number, to: number): string;
-        sanitize(html: string): string;
-    }): string | null;
-}
-
-/**
- * MermaidPlugin - Renders mermaid diagrams in the editor
- *
- * Supports block mermaid syntax:
- *   ```mermaid
- *   graph TD
- *     A --> B
- *   ```
- *
- * Behavior:
- * - Always show rendered diagram below the block
- * - Hide raw definition when cursor is outside the block
- * - Show raw definition with styled markers when cursor is inside
- */
-declare class MermaidPlugin extends DecorationPlugin {
-    readonly name = "mermaid";
-    readonly version = "1.0.0";
-    decorationPriority: number;
-    readonly requiredNodes: readonly ["MermaidBlock", "MermaidBlockMark"];
-    constructor();
-    /**
-     * Plugin theme
-     */
-    get theme(): (theme: ThemeEnum) => ThemeStyle;
-    /**
-     * Return markdown parser extensions for mermaid syntax
-     */
-    getMarkdownConfig(): MarkdownConfig;
-    /**
-     * Build decorations for mermaid blocks
-     */
-    buildDecorations(ctx: DecorationContext): void;
-    /**
-     * Render mermaid to HTML for preview mode
-     *
-     * Renders the actual mermaid diagram to SVG HTML
-     */
-    renderToHTML(node: SyntaxNode, _children: string, ctx: {
-        sliceDoc(from: number, to: number): string;
-        sanitize(html: string): string;
-    }): Promise<string | null>;
 }
 
 interface PreviewRenderContext {
@@ -506,7 +501,7 @@ declare class CodePlugin extends DecorationPlugin {
     /**
      * Keyboard shortcuts for code formatting
      */
-    getKeymap(): KeyBinding[];
+    getKeymap(): DescribedKeyBinding[];
     /**
      * Intercepts backtick typing to wrap selected text as inline code.
      *
@@ -642,44 +637,38 @@ declare class HRPlugin extends DecorationPlugin {
 }
 
 /**
- * EmojiPlugin - Decorates markdown emojis
+ * Build a fresh set of the essential plugins — the built-in markdown features Draftly
+ * enables by default.
  *
- * Parses and decorates emoji shortcodes like :smile:
- * - Converts valid shortcodes to Unicode emoji when cursor is outside
- * - Keeps raw shortcode visible while editing (cursor inside token)
+ * **Call this once per editor.** Plugin instances carry per-view state (`_context`, and in
+ * `TablePlugin`'s case the deferred-work re-entrancy locks), so two editors sharing one
+ * set overwrite each other's configuration and silently cancel each other's scheduled
+ * work. A factory makes that impossible to get wrong by accident; the deprecated
+ * {@link essentialPlugins} array does not.
+ *
+ * Excludes the three plugins with heavy dependencies. For everything, use
+ * `createAllPlugins()` from `draftly/plugins/all`, or add the ones you want:
+ *
+ * ```ts
+ * import { createEssentialPlugins } from "draftly/plugins";
+ * import { MermaidPlugin } from "draftly/plugins/mermaid";
+ *
+ * const plugins = [...createEssentialPlugins(), new MermaidPlugin()];
+ * ```
+ *
+ * The order is the registration order, which is *not* the decoration order — plugins are
+ * sorted by `decorationPriority` downstream.
+ *
+ * @returns A new array of newly-constructed plugin instances, owned by the caller
+ *
+ * @example
+ * ```ts
+ * import { draftly } from "draftly";
+ * import { createEssentialPlugins } from "draftly/plugins";
+ *
+ * const extensions = draftly({ plugins: createEssentialPlugins() });
+ * ```
  */
-declare class EmojiPlugin extends DecorationPlugin {
-    readonly name = "emoji";
-    readonly version = "1.0.0";
-    decorationPriority: number;
-    readonly requiredNodes: readonly ["Emoji", "EmojiMark"];
-    constructor();
-    /**
-     * Plugin theme
-     */
-    get theme(): (theme: ThemeEnum) => ThemeStyle;
-    /**
-     * Build emoji decorations by iterating the syntax tree
-     */
-    buildDecorations(ctx: DecorationContext): void;
-    renderToHTML(node: SyntaxNode, children: string, ctx: {
-        sliceDoc(from: number, to: number): string;
-        sanitize(html: string): string;
-        syntaxHighlighters?: readonly _lezer_highlight.Highlighter[];
-    }): string | null;
-}
+declare function createEssentialPlugins(): DraftlyPlugin[];
 
-/**
- * Default plugins
- *
- * This is the set of essential plugins
- */
-declare const essentialPlugins: DraftlyPlugin[];
-/**
- * All plugins
- *
- * This is the set of all plugins available with draftly
- */
-declare const allPlugins: DraftlyPlugin[];
-
-export { CodePlugin, EmojiPlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, MathPlugin, MermaidPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, allPlugins, essentialPlugins };
+export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, type TablePluginOptions, createEssentialPlugins };

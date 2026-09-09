@@ -12,4 +12,4 @@
  * draftly({ plugins: [...createEssentialPlugins(), new MermaidPlugin()] });
  * ```
  */
-export { MermaidPlugin } from "./mermaid-plugin";
+export { MermaidPlugin, type MermaidPluginOptions } from "./mermaid-plugin";

@@ -1,6 +1,6 @@
 # Plugin System
 
-> Last verified: 2026-08-18 · commit `86335cd`
+> Last verified: 2026-09-09 · commit `754465b` plus interaction worktree; runtime verification pending.
 > Source: `packages/draftly/src/editor/plugin.ts`
 
 The plugin contract is the single most important abstraction in Draftly. Everything a
@@ -239,7 +239,9 @@ const theme = createTheme({
    `headingMarkDecorations["heading-1"].spec.class` rather than retyping the string —
    this is what mechanically enforces editor/preview parity.
 3. **Guard every hiding decoration** with `ctx.selectionOverlapsRange(from, to)`.
-4. **Clamp `Decoration.replace` ranges to the line end.** Spanning a newline throws.
+4. **Clamp view-plugin `Decoration.replace` ranges to the line end.** That path cannot
+   span newlines. Supply multiline block replacements directly from a `StateField`, as
+   Mermaid does, so CodeMirror can account for block heights before viewport layout.
 5. **Never dispatch from `buildDecorations`.** Schedule via `onViewUpdate` +
    `requestAnimationFrame`/microtask, as `TablePlugin` does.
 6. **Keep the theme at the bottom of the file** as a `createTheme()` call. Split into
