@@ -1,6 +1,6 @@
 'use strict';
 
-var chunkKNRUB7XG_cjs = require('../chunk-KNRUB7XG.cjs');
+var chunkDDRW2SA3_cjs = require('../chunk-DDRW2SA3.cjs');
 require('../chunk-EWK52CV4.cjs');
 require('../chunk-X6JQRPQN.cjs');
 require('../chunk-XQHP5MJD.cjs');
@@ -13,51 +13,51 @@ require('../chunk-QFIW5FJA.cjs');
 
 Object.defineProperty(exports, "CodePlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.CodePlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.CodePlugin; }
 });
 Object.defineProperty(exports, "HRPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.HRPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.HRPlugin; }
 });
 Object.defineProperty(exports, "HTMLPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.HTMLPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.HTMLPlugin; }
 });
 Object.defineProperty(exports, "HeadingPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.HeadingPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.HeadingPlugin; }
 });
 Object.defineProperty(exports, "ImagePlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.ImagePlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.ImagePlugin; }
 });
 Object.defineProperty(exports, "InlinePlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.InlinePlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.InlinePlugin; }
 });
 Object.defineProperty(exports, "LinkPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.LinkPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.LinkPlugin; }
 });
 Object.defineProperty(exports, "ListPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.ListPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.ListPlugin; }
 });
 Object.defineProperty(exports, "ParagraphPlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.ParagraphPlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.ParagraphPlugin; }
 });
 Object.defineProperty(exports, "QuotePlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.QuotePlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.QuotePlugin; }
 });
 Object.defineProperty(exports, "TablePlugin", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.TablePlugin; }
+  get: function () { return chunkDDRW2SA3_cjs.TablePlugin; }
 });
 Object.defineProperty(exports, "createEssentialPlugins", {
   enumerable: true,
-  get: function () { return chunkKNRUB7XG_cjs.createEssentialPlugins; }
+  get: function () { return chunkDDRW2SA3_cjs.createEssentialPlugins; }
 });
 //# sourceMappingURL=index.cjs.map
 //# sourceMappingURL=index.cjs.map

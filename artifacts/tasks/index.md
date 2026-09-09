@@ -1,6 +1,6 @@
 # Task Index
 
-> Last verified: 2026-09-09 · commit `754465b` plus final rebuilt interaction worktree.
+> Last verified: 2026-09-09 · base commit `ef273c7` plus wrapped-cell pointer fix.
 > Single source of truth for what is being worked on and what has shipped.
 
 ---
@@ -134,6 +134,7 @@ bootstrap, so entries before 2026-08-18 are summaries rather than full task reco
 | ID      | Task                                                                                                  | Shipped              |
 | ------- | ----------------------------------------------------------------------------------------------------- | -------------------- |
 | `C-031` | [Pluma interactions](./completed/C-031-pluma-interactions.md) | 2026-09-09 |
+| `C-032` | [Wrapped table cell blank-space clicks](./completed/C-032-wrapped-cell-pointer.md) | 2026-09-09 |
 | `C-030` | [Share in-flight Mermaid renders](./completed/C-030-share-inflight-mermaid-renders.md) | 2026-08-21 |
 | `C-029` | [KaTeX peer dependency, inlined fonts](./completed/C-029-katex-peer-and-inlined-fonts.md) | 2026-08-21 |
 | `C-028` | [Remove the deprecated plugin arrays](./completed/C-028-remove-deprecated-plugin-arrays.md) | 2026-08-21 |

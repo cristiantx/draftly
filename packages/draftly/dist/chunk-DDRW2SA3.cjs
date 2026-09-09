@@ -1,20 +1,26 @@
-import { PreviewRenderer } from './chunk-LB72KTUD.js';
-import { createWrapSelectionInputHandler, safeUrl, displayWidth } from './chunk-QATV5LYI.js';
-import { resolveWidgetRange } from './chunk-CI47THVM.js';
-import { escapeHtml } from './chunk-LUQ5Q6D7.js';
-import { DraftlyPlugin, DecorationPlugin } from './chunk-7XQEHFZX.js';
-import { createTheme, toggleMarkdownStyle } from './chunk-XRXGYUPJ.js';
-import { Decoration, EditorView, BlockWrapper, WidgetType, keymap } from '@codemirror/view';
-import { tags, highlightCode } from '@lezer/highlight';
-import { Prec, EditorSelection, Annotation, RangeSet } from '@codemirror/state';
-import { syntaxTree, LanguageDescription } from '@codemirror/language';
-import { Table } from '@lezer/markdown';
-import DOMPurify from 'dompurify';
-import { languages } from '@codemirror/language-data';
+'use strict';
 
-var paragraphStart = Decoration.line({ class: "cm-draftly-paragraph-start" });
-var paragraphEnd = Decoration.line({ class: "cm-draftly-paragraph-end" });
-var ParagraphPlugin = class extends DraftlyPlugin {
+var chunkEWK52CV4_cjs = require('./chunk-EWK52CV4.cjs');
+var chunkX6JQRPQN_cjs = require('./chunk-X6JQRPQN.cjs');
+var chunkXQHP5MJD_cjs = require('./chunk-XQHP5MJD.cjs');
+var chunkFAW6KSSV_cjs = require('./chunk-FAW6KSSV.cjs');
+var chunk3TJPHTNQ_cjs = require('./chunk-3TJPHTNQ.cjs');
+var chunkPULMPDQL_cjs = require('./chunk-PULMPDQL.cjs');
+var view = require('@codemirror/view');
+var highlight = require('@lezer/highlight');
+var state = require('@codemirror/state');
+var language = require('@codemirror/language');
+var markdown = require('@lezer/markdown');
+var DOMPurify = require('dompurify');
+var languageData = require('@codemirror/language-data');
+
+function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
+
+var DOMPurify__default = /*#__PURE__*/_interopDefault(DOMPurify);
+
+var paragraphStart = view.Decoration.line({ class: "cm-draftly-paragraph-start" });
+var paragraphEnd = view.Decoration.line({ class: "cm-draftly-paragraph-end" });
+var ParagraphPlugin = class extends chunk3TJPHTNQ_cjs.DraftlyPlugin {
   name = "paragraph";
   version = "1.0.0";
   requiredNodes = ["Paragraph"];
@@ -49,7 +55,7 @@ var ParagraphPlugin = class extends DraftlyPlugin {
     return `<p class="cm-draftly-paragraph">${children}</p>`;
   }
 };
-var theme = createTheme({
+var theme = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Preview: one element carries both edges.
     ".cm-draftly-paragraph": {
@@ -67,24 +73,24 @@ var theme = createTheme({
 });
 var HEADING_TYPES = ["ATXHeading1", "ATXHeading2", "ATXHeading3", "ATXHeading4", "ATXHeading5", "ATXHeading6"];
 var headingMarkDecorations = {
-  "heading-1": Decoration.mark({ class: "cm-draftly-h1" }),
-  "heading-2": Decoration.mark({ class: "cm-draftly-h2" }),
-  "heading-3": Decoration.mark({ class: "cm-draftly-h3" }),
-  "heading-4": Decoration.mark({ class: "cm-draftly-h4" }),
-  "heading-5": Decoration.mark({ class: "cm-draftly-h5" }),
-  "heading-6": Decoration.mark({ class: "cm-draftly-h6" }),
-  "header-mark-class": Decoration.mark({ class: "cm-draftly-header-mark" }),
-  "heading-mark": Decoration.replace({})
+  "heading-1": view.Decoration.mark({ class: "cm-draftly-h1" }),
+  "heading-2": view.Decoration.mark({ class: "cm-draftly-h2" }),
+  "heading-3": view.Decoration.mark({ class: "cm-draftly-h3" }),
+  "heading-4": view.Decoration.mark({ class: "cm-draftly-h4" }),
+  "heading-5": view.Decoration.mark({ class: "cm-draftly-h5" }),
+  "heading-6": view.Decoration.mark({ class: "cm-draftly-h6" }),
+  "header-mark-class": view.Decoration.mark({ class: "cm-draftly-header-mark" }),
+  "heading-mark": view.Decoration.replace({})
 };
 var headingLineDecorations = {
-  "heading-1": Decoration.line({ class: "cm-draftly-line-h1" }),
-  "heading-2": Decoration.line({ class: "cm-draftly-line-h2" }),
-  "heading-3": Decoration.line({ class: "cm-draftly-line-h3" }),
-  "heading-4": Decoration.line({ class: "cm-draftly-line-h4" }),
-  "heading-5": Decoration.line({ class: "cm-draftly-line-h5" }),
-  "heading-6": Decoration.line({ class: "cm-draftly-line-h6" })
+  "heading-1": view.Decoration.line({ class: "cm-draftly-line-h1" }),
+  "heading-2": view.Decoration.line({ class: "cm-draftly-line-h2" }),
+  "heading-3": view.Decoration.line({ class: "cm-draftly-line-h3" }),
+  "heading-4": view.Decoration.line({ class: "cm-draftly-line-h4" }),
+  "heading-5": view.Decoration.line({ class: "cm-draftly-line-h5" }),
+  "heading-6": view.Decoration.line({ class: "cm-draftly-line-h6" })
 };
-var HeadingPlugin = class extends DecorationPlugin {
+var HeadingPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "heading";
   version = "1.0.0";
   decorationPriority = 10;
@@ -155,7 +161,7 @@ var HeadingPlugin = class extends DecorationPlugin {
 `;
   }
 };
-var theme2 = createTheme({
+var theme2 = chunkPULMPDQL_cjs.createTheme({
   default: {
     ".cm-draftly-h1": {
       fontSize: "2em",
@@ -220,14 +226,14 @@ var INLINE_TYPES = {
   Highlight: "highlight"
 };
 var inlineMarkDecorations = {
-  emphasis: Decoration.mark({ class: "cm-draftly-emphasis" }),
-  strong: Decoration.mark({ class: "cm-draftly-strong" }),
-  strikethrough: Decoration.mark({ class: "cm-draftly-strikethrough" }),
-  subscript: Decoration.mark({ class: "cm-draftly-subscript" }),
-  superscript: Decoration.mark({ class: "cm-draftly-superscript" }),
-  highlight: Decoration.mark({ class: "cm-draftly-highlight" }),
+  emphasis: view.Decoration.mark({ class: "cm-draftly-emphasis" }),
+  strong: view.Decoration.mark({ class: "cm-draftly-strong" }),
+  strikethrough: view.Decoration.mark({ class: "cm-draftly-strikethrough" }),
+  subscript: view.Decoration.mark({ class: "cm-draftly-subscript" }),
+  superscript: view.Decoration.mark({ class: "cm-draftly-superscript" }),
+  highlight: view.Decoration.mark({ class: "cm-draftly-highlight" }),
   // Markers (* _ ~~ ^ ~ ==)
-  "inline-mark": Decoration.replace({})
+  "inline-mark": view.Decoration.replace({})
 };
 var EQUALS = 61;
 var Punctuation = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\xA1\u2010-\u2027]/;
@@ -254,7 +260,7 @@ var highlightParser = {
     );
   }
 };
-var InlinePlugin = class extends DecorationPlugin {
+var InlinePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "inline";
   version = "1.0.0";
   decorationPriority = 20;
@@ -293,42 +299,42 @@ var InlinePlugin = class extends DecorationPlugin {
         name: "Bold",
         description: "Wrap the selection in ** **",
         key: "Mod-b",
-        run: toggleMarkdownStyle("**"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("**"),
         preventDefault: true
       },
       {
         name: "Italic",
         description: "Wrap the selection in * *",
         key: "Mod-i",
-        run: toggleMarkdownStyle("*"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("*"),
         preventDefault: true
       },
       {
         name: "Strikethrough",
         description: "Wrap the selection in ~~ ~~",
         key: "Mod-Shift-s",
-        run: toggleMarkdownStyle("~~"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("~~"),
         preventDefault: true
       },
       {
         name: "Subscript",
         description: "Wrap the selection in ~ ~",
         key: "Mod-,",
-        run: toggleMarkdownStyle("~"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("~"),
         preventDefault: true
       },
       {
         name: "Superscript",
         description: "Wrap the selection in ^ ^",
         key: "Mod-.",
-        run: toggleMarkdownStyle("^"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("^"),
         preventDefault: true
       },
       {
         name: "Highlight",
         description: "Wrap the selection in == ==",
         key: "Mod-Shift-h",
-        run: toggleMarkdownStyle("=="),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("=="),
         preventDefault: true
       }
     ];
@@ -342,7 +348,7 @@ var InlinePlugin = class extends DecorationPlugin {
    * - = -> ==selected==
    */
   getExtensions() {
-    return [createWrapSelectionInputHandler({ "*": "*", _: "_", "~": "~", "^": "^", "=": "==" })];
+    return [chunkX6JQRPQN_cjs.createWrapSelectionInputHandler({ "*": "*", _: "_", "~": "~", "^": "^", "=": "==" })];
   }
   /**
    * Return markdown parser extensions for highlight syntax (==text==)
@@ -350,8 +356,8 @@ var InlinePlugin = class extends DecorationPlugin {
   getMarkdownConfig() {
     return {
       defineNodes: [
-        { name: "Highlight", style: tags.emphasis },
-        { name: "HighlightMark", style: tags.processingInstruction }
+        { name: "Highlight", style: highlight.tags.emphasis },
+        { name: "HighlightMark", style: highlight.tags.processingInstruction }
       ],
       parseInline: [highlightParser]
     };
@@ -414,7 +420,7 @@ var InlinePlugin = class extends DecorationPlugin {
     return `<span class="${className}">${children}</span>`;
   }
 };
-var theme3 = createTheme({
+var theme3 = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Emphasis (italic)
     ".cm-draftly-emphasis": {
@@ -448,10 +454,10 @@ var theme3 = createTheme({
   }
 });
 var linkMarkDecorations = {
-  "link-text": Decoration.mark({ class: "cm-draftly-link-text" }),
-  "link-marker": Decoration.mark({ class: "cm-draftly-link-marker" }),
-  "link-url": Decoration.mark({ class: "cm-draftly-link-url" }),
-  "link-hidden": Decoration.mark({ class: "cm-draftly-link-hidden" })
+  "link-text": view.Decoration.mark({ class: "cm-draftly-link-text" }),
+  "link-marker": view.Decoration.mark({ class: "cm-draftly-link-marker" }),
+  "link-url": view.Decoration.mark({ class: "cm-draftly-link-url" }),
+  "link-hidden": view.Decoration.mark({ class: "cm-draftly-link-hidden" })
 };
 function parseLinkMarkdown(content) {
   const match = content.match(/^\[([^\]]*)\]\(([^"\s)]+)(?:\s+"([^"]*)")?\s*\)$/);
@@ -465,7 +471,7 @@ function parseLinkMarkdown(content) {
   }
   return result;
 }
-var LinkTooltipWidget = class extends WidgetType {
+var LinkTooltipWidget = class extends view.WidgetType {
   constructor(url, from, to) {
     super();
     this.url = url;
@@ -503,14 +509,14 @@ var LinkTooltipWidget = class extends WidgetType {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        const target = safeUrl(this.url);
+        const target = chunkX6JQRPQN_cjs.safeUrl(this.url);
         if (target) {
           window.open(target, "_blank", "noopener,noreferrer");
         }
       } else {
         e.preventDefault();
         e.stopPropagation();
-        const range = resolveWidgetRange(view, wrapper, ["Link"]) ?? { from: this.from, to: this.to };
+        const range = chunkXQHP5MJD_cjs.resolveWidgetRange(view, wrapper, ["Link"]) ?? { from: this.from, to: this.to };
         view.dispatch({
           selection: { anchor: range.from, head: range.to },
           scrollIntoView: true
@@ -524,7 +530,7 @@ var LinkTooltipWidget = class extends WidgetType {
     return event.type !== "click" && event.type !== "mouseenter" && event.type !== "mouseleave";
   }
 };
-var LinkPlugin = class extends DecorationPlugin {
+var LinkPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "link";
   version = "1.0.0";
   decorationPriority = 22;
@@ -614,27 +620,27 @@ var LinkPlugin = class extends DecorationPlugin {
     return true;
   }
   buildDecorations(ctx) {
-    const { view, decorations } = ctx;
+    const { view: view$1, decorations } = ctx;
     ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
         if (name === "Link") {
-          const content = view.state.sliceDoc(from, to);
+          const content = view$1.state.sliceDoc(from, to);
           const parsed = parseLinkMarkdown(content);
           if (!parsed) return;
           const cursorInRange = ctx.selectionOverlapsRange(from, to);
           if (cursorInRange) {
-            this.decorateRawLink(node.node, decorations, view);
+            this.decorateRawLink(node.node, decorations, view$1);
           } else {
             decorations.push(linkMarkDecorations["link-hidden"].range(from, to));
             decorations.push(
-              Decoration.widget({
+              view.Decoration.widget({
                 widget: new LinkTooltipWidget(parsed.url, from, to),
                 side: 1
               }).range(to)
             );
             decorations.push(
-              Decoration.replace({
+              view.Decoration.replace({
                 widget: new LinkTextWidget(parsed.text, parsed.url, from, to, parsed.title)
               }).range(from, to)
             );
@@ -672,13 +678,13 @@ var LinkPlugin = class extends DecorationPlugin {
     const content = ctx.sliceDoc(node.from, node.to);
     const parsed = parseLinkMarkdown(content);
     if (!parsed) return null;
-    const textContent = escapeHtml(parsed.text);
-    const urlAttr = escapeHtml(safeUrl(parsed.url));
-    const titleAttr = parsed.title ? ` title="${escapeHtml(parsed.title)}"` : "";
+    const textContent = chunkFAW6KSSV_cjs.escapeHtml(parsed.text);
+    const urlAttr = chunkFAW6KSSV_cjs.escapeHtml(chunkX6JQRPQN_cjs.safeUrl(parsed.url));
+    const titleAttr = parsed.title ? ` title="${chunkFAW6KSSV_cjs.escapeHtml(parsed.title)}"` : "";
     return `<a class="cm-draftly-link" href="${urlAttr}"${titleAttr} target="_blank" rel="noopener noreferrer">${textContent}</a>`;
   }
 };
-var LinkTextWidget = class extends WidgetType {
+var LinkTextWidget = class extends view.WidgetType {
   constructor(text, url, from, to, title) {
     super();
     this.text = text;
@@ -720,14 +726,14 @@ var LinkTextWidget = class extends WidgetType {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        const target = safeUrl(this.url);
+        const target = chunkX6JQRPQN_cjs.safeUrl(this.url);
         if (target) {
           window.open(target, "_blank", "noopener,noreferrer");
         }
       } else {
         e.preventDefault();
         e.stopPropagation();
-        const range = resolveWidgetRange(view, span, ["Link"]) ?? { from: this.from, to: this.to };
+        const range = chunkXQHP5MJD_cjs.resolveWidgetRange(view, span, ["Link"]) ?? { from: this.from, to: this.to };
         view.dispatch({
           selection: { anchor: range.from, head: range.to },
           scrollIntoView: true
@@ -741,7 +747,7 @@ var LinkTextWidget = class extends WidgetType {
     return event.type !== "click" && event.type !== "mouseenter" && event.type !== "mouseleave";
   }
 };
-var theme4 = createTheme({
+var theme4 = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Link text
     ".cm-draftly-link-text": {
@@ -825,7 +831,7 @@ var classes = {
   previewUL: "cm-draftly-list-ul",
   previewOL: "cm-draftly-list-ol"
 };
-var TaskCheckboxWidget = class extends WidgetType {
+var TaskCheckboxWidget = class extends view.WidgetType {
   constructor(checked) {
     super();
     this.checked = checked;
@@ -867,7 +873,7 @@ var TaskCheckboxWidget = class extends WidgetType {
     }
   }
 };
-var ListPlugin = class extends DecorationPlugin {
+var ListPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "list";
   version = "1.0.0";
   decorationPriority = 20;
@@ -1044,7 +1050,7 @@ var ListPlugin = class extends DecorationPlugin {
     else if (listType === "OrderedList") lineClass = classes.lineOL;
     else lineClass = classes.lineUL;
     decorations.push(
-      Decoration.line({
+      view.Decoration.line({
         class: lineClass,
         attributes: { style: `--depth: ${depth}` }
       }).range(line.from)
@@ -1068,24 +1074,24 @@ var ListPlugin = class extends DecorationPlugin {
     const listType = grandparent?.name;
     const activeClass = cursorOnMark ? classes.active : "";
     if (from > line.from) {
-      decorations.push(Decoration.mark({ class: classes.indent + activeClass }).range(line.from, from));
+      decorations.push(view.Decoration.mark({ class: classes.indent + activeClass }).range(line.from, from));
     }
     const markClass = listType === "OrderedList" ? classes.markOL : classes.markUL;
-    decorations.push(Decoration.mark({ class: markClass + activeClass }).range(from, to + 1));
+    decorations.push(view.Decoration.mark({ class: markClass + activeClass }).range(from, to + 1));
     const contentStart = to + 1;
     if (contentStart < line.to) {
-      decorations.push(Decoration.mark({ class: classes.content }).range(contentStart, line.to));
+      decorations.push(view.Decoration.mark({ class: classes.content }).range(contentStart, line.to));
     }
   }
   /** Decorate task markers - show checkbox widget or raw text based on cursor */
-  decorateTaskMarker(from, to, view, decorations, cursorInLine) {
-    const text = view.state.sliceDoc(from, to);
+  decorateTaskMarker(from, to, view$1, decorations, cursorInLine) {
+    const text = view$1.state.sliceDoc(from, to);
     const isChecked = text.includes("x") || text.includes("X");
     if (cursorInLine) {
-      decorations.push(Decoration.mark({ class: classes.taskMarker }).range(from, to));
+      decorations.push(view.Decoration.mark({ class: classes.taskMarker }).range(from, to));
     } else {
       decorations.push(
-        Decoration.replace({
+        view.Decoration.replace({
           widget: new TaskCheckboxWidget(isChecked)
         }).range(from, to)
       );
@@ -1117,7 +1123,7 @@ var ListPlugin = class extends DecorationPlugin {
     }
   }
 };
-var theme5 = createTheme({
+var theme5 = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Indentation marker positioning
     ".cm-draftly-list-indent": {
@@ -1240,7 +1246,8 @@ function pointerPosition(view, event) {
     const walker = document2.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
     let text = walker.nextNode();
     let nearest = null;
-    let distance = Infinity;
+    let horizontalDistance = Infinity;
+    let verticalDistance = Infinity;
     while (text) {
       if (text.textContent?.length) {
         const textRange = document2.createRange();
@@ -1249,16 +1256,16 @@ function pointerPosition(view, event) {
           if (!rect.width || !rect.height) continue;
           const dx = Math.max(rect.left - x, 0, x - rect.right);
           const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-          const next = dx * dx + dy * dy;
-          if (next < distance) {
+          if (dy < verticalDistance || dy === verticalDistance && dx < horizontalDistance) {
             nearest = rect;
-            distance = next;
+            verticalDistance = dy;
+            horizontalDistance = dx;
           }
         }
       }
       text = walker.nextNode();
     }
-    if (nearest && distance > 0) {
+    if (nearest && (verticalDistance > 0 || horizontalDistance > 0)) {
       x = Math.max(nearest.left + 0.1, Math.min(x, nearest.right - 0.1));
       y = Math.max(nearest.top + 0.1, Math.min(y, nearest.bottom - 0.1));
     }
@@ -1278,8 +1285,8 @@ function pointerPosition(view, event) {
     return null;
   }
 }
-var tablePointerSelection = Prec.highest(
-  EditorView.mouseSelectionStyle.of((view, event) => {
+var tablePointerSelection = state.Prec.highest(
+  view.EditorView.mouseSelectionStyle.of((view, event) => {
     if (event.button !== 0 || !(event.target instanceof Element) || !event.target.closest(".cm-draftly-table-cell") || event.target.closest("button, a, [contenteditable=false]")) {
       return null;
     }
@@ -1291,12 +1298,12 @@ var tablePointerSelection = Prec.highest(
     const initialY = event.clientY;
     const granularity = Math.min(event.detail, 3);
     const rangeAt = (position) => {
-      if (granularity === 2) return view.state.wordAt(position) ?? EditorSelection.cursor(position);
+      if (granularity === 2) return view.state.wordAt(position) ?? state.EditorSelection.cursor(position);
       if (granularity === 3) {
         const line = view.state.doc.lineAt(position);
-        return EditorSelection.range(line.from, line.to);
+        return state.EditorSelection.range(line.from, line.to);
       }
-      return EditorSelection.cursor(position);
+      return state.EditorSelection.cursor(position);
     };
     return {
       get(current, extend, multiple) {
@@ -1306,8 +1313,8 @@ var tablePointerSelection = Prec.highest(
         const last = rangeAt(position);
         const anchor = extend ? original.main.anchor : position < start ? first.to : first.from;
         const head = position < start ? last.from : last.to;
-        const selection = EditorSelection.range(anchor, head);
-        return multiple ? original.addRange(selection) : EditorSelection.create([selection]);
+        const selection = state.EditorSelection.range(anchor, head);
+        return multiple ? original.addRange(selection) : state.EditorSelection.create([selection]);
       },
       update(update) {
         if (update.docChanged) {
@@ -1329,15 +1336,15 @@ var TABLE_TEMPLATE = {
   alignments: ["left", "left", "left"],
   rows: [["", "", ""]]
 };
-var normalizeAnnotation = Annotation.define();
-var repairSelectionAnnotation = Annotation.define();
-var pipeReplace = Decoration.replace({});
-var delimiterReplace = Decoration.replace({});
-var tableBlockWrapper = BlockWrapper.create({
+var normalizeAnnotation = state.Annotation.define();
+var repairSelectionAnnotation = state.Annotation.define();
+var pipeReplace = view.Decoration.replace({});
+var delimiterReplace = view.Decoration.replace({});
+var tableBlockWrapper = view.BlockWrapper.create({
   tagName: "div",
   attributes: { class: "cm-draftly-table-wrapper" }
 });
-var TableBreakWidget = class extends WidgetType {
+var TableBreakWidget = class extends view.WidgetType {
   /** Reuses the same widget instance for identical break markers. */
   eq() {
     return true;
@@ -1355,7 +1362,7 @@ var TableBreakWidget = class extends WidgetType {
     return false;
   }
 };
-var TableControlsWidget = class extends WidgetType {
+var TableControlsWidget = class extends view.WidgetType {
   constructor(onAddRow, onAddColumn) {
     super();
     this.onAddRow = onAddRow;
@@ -1511,7 +1518,7 @@ function normalizeCellContent(text) {
   return parts.join(` ${BREAK_TAG} `).trim();
 }
 function renderWidth(text) {
-  return displayWidth(canonicalizeBreakTags(text).replace(BREAK_TAG, " ").replace(/\\\|/g, "|"));
+  return chunkX6JQRPQN_cjs.displayWidth(canonicalizeBreakTags(text).replace(BREAK_TAG, " ").replace(/\\\|/g, "|"));
 }
 function padCell(text, width, alignment) {
   const safeWidth = Math.max(width, renderWidth(text));
@@ -1583,7 +1590,7 @@ function buildEmptyRow(columnCount) {
 }
 function createPreviewRenderer(markdown, config) {
   const plugins = (config?.plugins || []).filter((plugin) => plugin.name !== "paragraph");
-  return new PreviewRenderer(markdown, plugins, config?.markdown || [], config?.theme || "auto" /* AUTO */, true);
+  return new chunkEWK52CV4_cjs.PreviewRenderer(markdown, plugins, config?.markdown || [], config?.theme || "auto" /* AUTO */, true);
 }
 function stripSingleParagraph(html) {
   const trimmed = html.trim();
@@ -1747,7 +1754,7 @@ function readTableInfo(state, nodeFrom, nodeTo) {
 }
 function getTableInfoAtPosition(state, position) {
   let resolved = null;
-  syntaxTree(state).iterate({
+  language.syntaxTree(state).iterate({
     enter: (node) => {
       if (resolved || node.name !== "Table") {
         return;
@@ -1809,31 +1816,31 @@ function collectBreakRanges(tableInfo) {
   return ranges;
 }
 var lineDecorations = {
-  header: Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-header-row" }),
-  delimiter: Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-delimiter-row" }),
-  body: Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-body-row" }),
-  even: Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-body-row cm-draftly-table-row-even" }),
-  last: Decoration.line({ class: "cm-draftly-table-row-last" })
+  header: view.Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-header-row" }),
+  delimiter: view.Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-delimiter-row" }),
+  body: view.Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-body-row" }),
+  even: view.Decoration.line({ class: "cm-draftly-table-row cm-draftly-table-body-row cm-draftly-table-row-even" }),
+  last: view.Decoration.line({ class: "cm-draftly-table-row-last" })
 };
 var cellDecorations = {
-  "th-left": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th" }),
-  "th-center": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-center" }),
-  "th-right": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-right" }),
-  "th-left-last": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-last" }),
-  "th-center-last": Decoration.mark({
+  "th-left": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th" }),
+  "th-center": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-center" }),
+  "th-right": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-right" }),
+  "th-left-last": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-last" }),
+  "th-center-last": view.Decoration.mark({
     class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-center cm-draftly-table-cell-last"
   }),
-  "th-right-last": Decoration.mark({
+  "th-right-last": view.Decoration.mark({
     class: "cm-draftly-table-cell cm-draftly-table-th cm-draftly-table-cell-right cm-draftly-table-cell-last"
   }),
-  "td-left": Decoration.mark({ class: "cm-draftly-table-cell" }),
-  "td-center": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-center" }),
-  "td-right": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-right" }),
-  "td-left-last": Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-last" }),
-  "td-center-last": Decoration.mark({
+  "td-left": view.Decoration.mark({ class: "cm-draftly-table-cell" }),
+  "td-center": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-center" }),
+  "td-right": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-right" }),
+  "td-left-last": view.Decoration.mark({ class: "cm-draftly-table-cell cm-draftly-table-cell-last" }),
+  "td-center-last": view.Decoration.mark({
     class: "cm-draftly-table-cell cm-draftly-table-cell-center cm-draftly-table-cell-last"
   }),
-  "td-right-last": Decoration.mark({
+  "td-right-last": view.Decoration.mark({
     class: "cm-draftly-table-cell cm-draftly-table-cell-right cm-draftly-table-cell-last"
   })
 };
@@ -1841,7 +1848,7 @@ function getCellDecoration(isHeader, alignment, isLastCell) {
   const key = `${isHeader ? "th" : "td"}-${alignment}${isLastCell ? "-last" : ""}`;
   return cellDecorations[key];
 }
-var TablePlugin = class extends DecorationPlugin {
+var TablePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   /** @param options Host choices for automatic source formatting. */
   constructor(options = {}) {
     super();
@@ -1881,16 +1888,16 @@ var TablePlugin = class extends DecorationPlugin {
   }
   /** Enables GFM table parsing for the editor and preview renderer. */
   getMarkdownConfig() {
-    return Table;
+    return markdown.Table;
   }
   /** Registers block wrappers and atomic ranges for the table UI. */
   getExtensions() {
     return [
-      Prec.highest(keymap.of(this.buildTableKeymap())),
+      state.Prec.highest(view.keymap.of(this.buildTableKeymap())),
       tablePointerSelection,
-      EditorView.blockWrappers.of((view) => this.computeBlockWrappers(view)),
-      EditorView.atomicRanges.of((view) => this.computeAtomicRanges(view)),
-      EditorView.domEventHandlers({
+      view.EditorView.blockWrappers.of((view) => this.computeBlockWrappers(view)),
+      view.EditorView.atomicRanges.of((view) => this.computeAtomicRanges(view)),
+      view.EditorView.domEventHandlers({
         keydown: (event, view) => this.handleDomKeydown(view, event)
       })
     ];
@@ -2131,35 +2138,35 @@ var TablePlugin = class extends DecorationPlugin {
     return null;
   }
   /** Computes the block wrapper ranges used to group table lines. */
-  computeBlockWrappers(view) {
+  computeBlockWrappers(view$1) {
     const wrappers = [];
-    syntaxTree(view.state).iterate({
+    language.syntaxTree(view$1.state).iterate({
       enter: (node) => {
         if (node.name !== "Table") {
           return;
         }
-        const tableInfo = readTableInfo(view.state, node.from, node.to);
+        const tableInfo = readTableInfo(view$1.state, node.from, node.to);
         if (tableInfo) {
           wrappers.push(tableBlockWrapper.range(tableInfo.from, tableInfo.to));
         }
       }
     });
-    return BlockWrapper.set(wrappers, true);
+    return view.BlockWrapper.set(wrappers, true);
   }
   /** Computes atomic ranges for delimiters and inline break tags. */
-  computeAtomicRanges(view) {
+  computeAtomicRanges(view$1) {
     const ranges = [];
-    syntaxTree(view.state).iterate({
+    language.syntaxTree(view$1.state).iterate({
       enter: (node) => {
         if (node.name !== "Table") {
           return;
         }
-        const tableInfo = readTableInfo(view.state, node.from, node.to);
+        const tableInfo = readTableInfo(view$1.state, node.from, node.to);
         if (!tableInfo) {
           return;
         }
         for (let lineNumber = tableInfo.startLineNumber; lineNumber <= tableInfo.endLineNumber; lineNumber++) {
-          const line = view.state.doc.line(lineNumber);
+          const line = view$1.state.doc.line(lineNumber);
           if (lineNumber === tableInfo.delimiterLineNumber) {
             ranges.push(delimiterReplace.range(line.from, line.to));
             continue;
@@ -2183,7 +2190,7 @@ var TablePlugin = class extends DecorationPlugin {
             const regex = new RegExp(BREAK_TAG_REGEX);
             while ((match = regex.exec(rawText)) !== null) {
               ranges.push(
-                Decoration.replace({ widget: new TableBreakWidget() }).range(
+                view.Decoration.replace({ widget: new TableBreakWidget() }).range(
                   line.from + rawFrom + match.index,
                   line.from + rawFrom + match.index + match[0].length
                 )
@@ -2193,12 +2200,12 @@ var TablePlugin = class extends DecorationPlugin {
         }
       }
     });
-    return RangeSet.of(ranges, true);
+    return state.RangeSet.of(ranges, true);
   }
   /** Applies row, cell, and control decorations for a single table. */
-  decorateTable(view, decorations, tableInfo) {
+  decorateTable(view$1, decorations, tableInfo) {
     for (let lineNumber = tableInfo.startLineNumber; lineNumber <= tableInfo.endLineNumber; lineNumber++) {
-      const line = view.state.doc.line(lineNumber);
+      const line = view$1.state.doc.line(lineNumber);
       const isHeader = lineNumber === tableInfo.startLineNumber;
       const isDelimiter = lineNumber === tableInfo.delimiterLineNumber;
       const isLastBody = !isHeader && !isDelimiter && lineNumber === tableInfo.endLineNumber;
@@ -2222,7 +2229,7 @@ var TablePlugin = class extends DecorationPlugin {
       this.decorateLine(decorations, line.from, line.text, tableInfo.alignments, isHeader);
     }
     decorations.push(
-      Decoration.widget({
+      view.Decoration.widget({
         widget: new TableControlsWidget(
           (view2) => {
             const liveTable = getTableInfoAtPosition(view2.state, tableInfo.from);
@@ -2273,7 +2280,7 @@ var TablePlugin = class extends DecorationPlugin {
       const regex = new RegExp(BREAK_TAG_REGEX);
       while ((match = regex.exec(rawText)) !== null) {
         decorations.push(
-          Decoration.replace({ widget: new TableBreakWidget() }).range(
+          view.Decoration.replace({ widget: new TableBreakWidget() }).range(
             absoluteFrom + match.index,
             absoluteFrom + match.index + match[0].length
           )
@@ -2284,7 +2291,7 @@ var TablePlugin = class extends DecorationPlugin {
   /** Normalizes every parsed table block back into canonical markdown. */
   normalizeTables(view) {
     const changes = [];
-    syntaxTree(view.state).iterate({
+    language.syntaxTree(view.state).iterate({
       enter: (node) => {
         if (node.name !== "Table") {
           return;
@@ -2333,7 +2340,7 @@ var TablePlugin = class extends DecorationPlugin {
   /** Adds missing spacer lines above and below tables after edits. */
   ensureTablePadding(view) {
     const changes = [];
-    syntaxTree(view.state).iterate({
+    language.syntaxTree(view.state).iterate({
       enter: (node) => {
         if (node.name !== "Table") {
           return;
@@ -2706,7 +2713,7 @@ var TablePlugin = class extends DecorationPlugin {
     return findCellAtPosition(tableInfo, view.state.selection.main.head);
   }
 };
-var theme6 = createTheme({
+var theme6 = chunkPULMPDQL_cjs.createTheme({
   default: {
     ".cm-draftly-table-wrapper, .cm-draftly-table-widget": {
       display: "table",
@@ -2823,14 +2830,14 @@ var theme6 = createTheme({
   }
 });
 var htmlMarkDecorations = {
-  "html-tag": Decoration.mark({ class: "cm-draftly-html-tag" }),
-  "html-comment": Decoration.mark({ class: "cm-draftly-html-comment" })
+  "html-tag": view.Decoration.mark({ class: "cm-draftly-html-tag" }),
+  "html-comment": view.Decoration.mark({ class: "cm-draftly-html-comment" })
 };
 var htmlLineDecorations = {
-  "html-block": Decoration.line({ class: "cm-draftly-line-html-block" }),
-  "hidden-line": Decoration.line({ class: "cm-draftly-hidden-line" })
+  "html-block": view.Decoration.line({ class: "cm-draftly-line-html-block" }),
+  "hidden-line": view.Decoration.line({ class: "cm-draftly-hidden-line" })
 };
-var HTMLPreviewWidget = class extends WidgetType {
+var HTMLPreviewWidget = class extends view.WidgetType {
   constructor(html) {
     super();
     this.html = html;
@@ -2841,14 +2848,14 @@ var HTMLPreviewWidget = class extends WidgetType {
   toDOM() {
     const div = document.createElement("div");
     div.className = "cm-draftly-html-preview";
-    div.innerHTML = DOMPurify.sanitize(this.html);
+    div.innerHTML = DOMPurify__default.default.sanitize(this.html);
     return div;
   }
   ignoreEvent() {
     return false;
   }
 };
-var InlineHTMLPreviewWidget = class extends WidgetType {
+var InlineHTMLPreviewWidget = class extends view.WidgetType {
   constructor(html) {
     super();
     this.html = html;
@@ -2859,7 +2866,7 @@ var InlineHTMLPreviewWidget = class extends WidgetType {
   toDOM() {
     const span = document.createElement("span");
     span.className = "cm-draftly-inline-html-preview";
-    span.innerHTML = DOMPurify.sanitize(this.html);
+    span.innerHTML = DOMPurify__default.default.sanitize(this.html);
     return span;
   }
   ignoreEvent() {
@@ -2870,7 +2877,7 @@ var HTML_NODE_NAMES = ["HTMLBlock", "HTMLTag", "Comment", "CommentBlock"];
 function sanitizeHTMLTag(raw, sanitize) {
   const parsed = parseHTMLTag(raw);
   if (!parsed) {
-    return escapeHtml(raw);
+    return chunkFAW6KSSV_cjs.escapeHtml(raw);
   }
   const { tagName, isClosing } = parsed;
   if (isClosing) {
@@ -2894,7 +2901,7 @@ function parseHTMLTag(content) {
     )
   };
 }
-var HTMLPlugin = class extends DecorationPlugin {
+var HTMLPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "html";
   version = "1.0.0";
   decorationPriority = 30;
@@ -2909,7 +2916,7 @@ var HTMLPlugin = class extends DecorationPlugin {
     return theme7;
   }
   buildDecorations(ctx) {
-    const { view, decorations } = ctx;
+    const { view: view$1, decorations } = ctx;
     const htmlGroups = [];
     const htmlTags = [];
     ctx.iterateVisible({
@@ -2920,7 +2927,7 @@ var HTMLPlugin = class extends DecorationPlugin {
           return;
         }
         if (name === "HTMLTag") {
-          const content = view.state.sliceDoc(from, to);
+          const content = view$1.state.sliceDoc(from, to);
           const parsed = parseHTMLTag(content);
           if (parsed) {
             htmlTags.push({
@@ -2935,7 +2942,7 @@ var HTMLPlugin = class extends DecorationPlugin {
         if (name === "HTMLBlock") {
           const last = htmlGroups[htmlGroups.length - 1];
           if (last) {
-            const gap = view.state.sliceDoc(last.to, from);
+            const gap = view$1.state.sliceDoc(last.to, from);
             if (!gap.trim()) {
               last.to = to;
               return;
@@ -2955,12 +2962,12 @@ var HTMLPlugin = class extends DecorationPlugin {
         inlineElements.push({
           from: openTag.from,
           to: openTag.to,
-          content: view.state.sliceDoc(openTag.from, openTag.to)
+          content: view$1.state.sliceDoc(openTag.from, openTag.to)
         });
         usedTags.add(i);
         continue;
       }
-      const openLine = view.state.doc.lineAt(openTag.from);
+      const openLine = view$1.state.doc.lineAt(openTag.from);
       let depth = 1;
       let closeTagIndex = null;
       for (let j = i + 1; j < htmlTags.length && depth > 0; j++) {
@@ -2982,7 +2989,7 @@ var HTMLPlugin = class extends DecorationPlugin {
         inlineElements.push({
           from: openTag.from,
           to: closeTag.to,
-          content: view.state.sliceDoc(openTag.from, closeTag.to)
+          content: view$1.state.sliceDoc(openTag.from, closeTag.to)
         });
         for (let k = i; k <= closeTagIndex; k++) {
           usedTags.add(k);
@@ -3008,7 +3015,7 @@ var HTMLPlugin = class extends DecorationPlugin {
         }
       } else {
         decorations.push(
-          Decoration.replace({
+          view.Decoration.replace({
             widget: new InlineHTMLPreviewWidget(elem.content)
           }).range(elem.from, elem.to)
         );
@@ -3022,23 +3029,23 @@ var HTMLPlugin = class extends DecorationPlugin {
     }
     for (const group of htmlGroups) {
       const { from, to } = group;
-      const nodeLineStart = view.state.doc.lineAt(from);
-      const nodeLineEnd = view.state.doc.lineAt(to);
+      const nodeLineStart = view$1.state.doc.lineAt(from);
+      const nodeLineEnd = view$1.state.doc.lineAt(to);
       const cursorInRange = ctx.cursorInRange(nodeLineStart.from, nodeLineEnd.to);
       if (cursorInRange) {
         for (let i = nodeLineStart.number; i <= nodeLineEnd.number; i++) {
-          const line = view.state.doc.line(i);
+          const line = view$1.state.doc.line(i);
           decorations.push(htmlLineDecorations["html-block"].range(line.from));
         }
       } else {
-        const htmlContent = view.state.sliceDoc(from, to);
+        const htmlContent = view$1.state.sliceDoc(from, to);
         decorations.push(
-          Decoration.replace({
+          view.Decoration.replace({
             widget: new HTMLPreviewWidget(htmlContent.trim())
           }).range(from, nodeLineStart.to)
         );
         for (let i = nodeLineStart.number + 1; i <= nodeLineEnd.number; i++) {
-          const line = view.state.doc.line(i);
+          const line = view$1.state.doc.line(i);
           decorations.push(htmlLineDecorations["hidden-line"].range(line.from));
         }
       }
@@ -3071,7 +3078,7 @@ var HTMLPlugin = class extends DecorationPlugin {
     }
   }
 };
-var theme7 = createTheme({
+var theme7 = chunkPULMPDQL_cjs.createTheme({
   default: {
     ".cm-draftly-html-tag": {
       color: "var(--draftly-color-muted)",
@@ -3112,11 +3119,11 @@ var theme7 = createTheme({
   }
 });
 var imageMarkDecorations = {
-  "image-block": Decoration.line({ class: "cm-draftly-image-block" }),
-  "image-marker": Decoration.mark({ class: "cm-draftly-image-marker" }),
-  "image-alt": Decoration.mark({ class: "cm-draftly-image-alt" }),
-  "image-url": Decoration.mark({ class: "cm-draftly-image-url" }),
-  "image-hidden": Decoration.mark({ class: "cm-draftly-image-hidden" })
+  "image-block": view.Decoration.line({ class: "cm-draftly-image-block" }),
+  "image-marker": view.Decoration.mark({ class: "cm-draftly-image-marker" }),
+  "image-alt": view.Decoration.mark({ class: "cm-draftly-image-alt" }),
+  "image-url": view.Decoration.mark({ class: "cm-draftly-image-url" }),
+  "image-hidden": view.Decoration.mark({ class: "cm-draftly-image-hidden" })
 };
 function parseImageMarkdown(content) {
   const match = content.match(/^!\[([^\]]*)\]\(([^"\s)]+)(?:\s+"([^"]*)")?\s*\)$/);
@@ -3130,7 +3137,7 @@ function parseImageMarkdown(content) {
   }
   return result;
 }
-var ImageWidget = class extends WidgetType {
+var ImageWidget = class extends view.WidgetType {
   constructor(url, alt, from, to, title) {
     super();
     this.url = url;
@@ -3159,7 +3166,7 @@ var ImageWidget = class extends WidgetType {
     figure.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const range = resolveWidgetRange(view, figure, ["Image"]) ?? { from: this.from, to: this.to };
+      const range = chunkXQHP5MJD_cjs.resolveWidgetRange(view, figure, ["Image"]) ?? { from: this.from, to: this.to };
       view.dispatch({
         selection: { anchor: range.from, head: range.to },
         scrollIntoView: true
@@ -3168,7 +3175,7 @@ var ImageWidget = class extends WidgetType {
     });
     const img = document.createElement("img");
     img.className = "cm-draftly-image";
-    img.src = safeUrl(this.url, { allowDataImages: true });
+    img.src = chunkX6JQRPQN_cjs.safeUrl(this.url, { allowDataImages: true });
     img.alt = this.alt;
     img.setAttribute("loading", "lazy");
     img.setAttribute("decoding", "async");
@@ -3197,7 +3204,7 @@ var ImageWidget = class extends WidgetType {
     return event.type !== "click";
   }
 };
-var ImagePlugin = class extends DecorationPlugin {
+var ImagePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "image";
   version = "1.0.0";
   decorationPriority = 25;
@@ -3293,18 +3300,18 @@ var ImagePlugin = class extends DecorationPlugin {
     return true;
   }
   buildDecorations(ctx) {
-    const { view, decorations } = ctx;
+    const { view: view$1, decorations } = ctx;
     ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
         if (name === "Image") {
-          const content = view.state.sliceDoc(from, to);
+          const content = view$1.state.sliceDoc(from, to);
           const parsed = parseImageMarkdown(content);
           if (!parsed) return;
           const cursorInRange = ctx.selectionOverlapsRange(from, to);
           decorations.push(imageMarkDecorations["image-block"].range(from));
           decorations.push(
-            Decoration.widget({
+            view.Decoration.widget({
               widget: new ImageWidget(parsed.url, parsed.alt, from, to, parsed.title),
               side: 1,
               // Place after the position
@@ -3313,7 +3320,7 @@ var ImagePlugin = class extends DecorationPlugin {
             }).range(to)
           );
           if (cursorInRange) {
-            this.decorateRawImage(node.node, decorations, view);
+            this.decorateRawImage(node.node, decorations, view$1);
           } else {
             decorations.push(imageMarkDecorations["image-hidden"].range(from, to));
           }
@@ -3353,20 +3360,20 @@ var ImagePlugin = class extends DecorationPlugin {
     const content = ctx.sliceDoc(node.from, node.to);
     const parsed = parseImageMarkdown(content);
     if (!parsed) return null;
-    const altAttr = escapeHtml(parsed.alt);
-    const srcAttr = escapeHtml(safeUrl(parsed.url, { allowDataImages: true }));
-    const titleAttr = parsed.title ? ` title="${escapeHtml(parsed.title)}"` : "";
-    const ariaLabel = parsed.title ? ` aria-label="${escapeHtml(parsed.title)}"` : "";
+    const altAttr = chunkFAW6KSSV_cjs.escapeHtml(parsed.alt);
+    const srcAttr = chunkFAW6KSSV_cjs.escapeHtml(chunkX6JQRPQN_cjs.safeUrl(parsed.url, { allowDataImages: true }));
+    const titleAttr = parsed.title ? ` title="${chunkFAW6KSSV_cjs.escapeHtml(parsed.title)}"` : "";
+    const ariaLabel = parsed.title ? ` aria-label="${chunkFAW6KSSV_cjs.escapeHtml(parsed.title)}"` : "";
     let html = `<figure class="cm-draftly-image-figure" role="figure"${ariaLabel}>`;
     html += `<img class="cm-draftly-image" src="${srcAttr}" alt="${altAttr}"${titleAttr} loading="lazy" decoding="async" />`;
     if (parsed.title) {
-      html += `<figcaption class="cm-draftly-image-caption">${escapeHtml(parsed.title)}</figcaption>`;
+      html += `<figcaption class="cm-draftly-image-caption">${chunkFAW6KSSV_cjs.escapeHtml(parsed.title)}</figcaption>`;
     }
     html += "</figure>";
     return html;
   }
 };
-var theme8 = createTheme({
+var theme8 = chunkPULMPDQL_cjs.createTheme({
   default: {
     ".cm-draftly-image-block br": {
       display: "none"
@@ -3429,7 +3436,7 @@ var theme8 = createTheme({
 });
 
 // src/plugins/code-plugin.theme.ts
-var codePluginTheme = createTheme({
+var codePluginTheme = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Inline code
     ".cm-draftly-code-inline": {
@@ -3726,27 +3733,27 @@ var QUOTED_INFO_PATTERN = /(\w+)="([^"]*)"/g;
 var TEXT_HIGHLIGHT_PATTERN = /\/([^/]+)\/(?:(\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*))?/g;
 var codeMarkDecorations = {
   // Inline code
-  "inline-code": Decoration.mark({ class: "cm-draftly-code-inline" }),
-  "inline-mark": Decoration.replace({}),
+  "inline-code": view.Decoration.mark({ class: "cm-draftly-code-inline" }),
+  "inline-mark": view.Decoration.replace({}),
   // Fenced code block
-  "code-block-line": Decoration.line({ class: "cm-draftly-code-block-line" }),
-  "code-block-line-start": Decoration.line({ class: "cm-draftly-code-block-line-start" }),
-  "code-block-line-end": Decoration.line({ class: "cm-draftly-code-block-line-end" }),
-  "code-fence": Decoration.mark({ class: "cm-draftly-code-fence" }),
-  "code-hidden": Decoration.replace({}),
+  "code-block-line": view.Decoration.line({ class: "cm-draftly-code-block-line" }),
+  "code-block-line-start": view.Decoration.line({ class: "cm-draftly-code-block-line-start" }),
+  "code-block-line-end": view.Decoration.line({ class: "cm-draftly-code-block-line-end" }),
+  "code-fence": view.Decoration.mark({ class: "cm-draftly-code-fence" }),
+  "code-hidden": view.Decoration.replace({}),
   // Highlights
-  "code-line-highlight": Decoration.line({ class: "cm-draftly-code-line-highlight" }),
-  "code-text-highlight": Decoration.mark({ class: "cm-draftly-code-text-highlight" }),
+  "code-line-highlight": view.Decoration.line({ class: "cm-draftly-code-line-highlight" }),
+  "code-text-highlight": view.Decoration.mark({ class: "cm-draftly-code-text-highlight" }),
   // Diff preview
-  "diff-line-add": Decoration.line({ class: "cm-draftly-code-line-diff-add" }),
-  "diff-line-del": Decoration.line({ class: "cm-draftly-code-line-diff-del" }),
-  "diff-sign-add": Decoration.mark({ class: "cm-draftly-code-diff-sign-add" }),
-  "diff-sign-del": Decoration.mark({ class: "cm-draftly-code-diff-sign-del" }),
-  "diff-mod-add": Decoration.mark({ class: "cm-draftly-code-diff-mod-add" }),
-  "diff-mod-del": Decoration.mark({ class: "cm-draftly-code-diff-mod-del" }),
-  "diff-escape-hidden": Decoration.replace({})
+  "diff-line-add": view.Decoration.line({ class: "cm-draftly-code-line-diff-add" }),
+  "diff-line-del": view.Decoration.line({ class: "cm-draftly-code-line-diff-del" }),
+  "diff-sign-add": view.Decoration.mark({ class: "cm-draftly-code-diff-sign-add" }),
+  "diff-sign-del": view.Decoration.mark({ class: "cm-draftly-code-diff-sign-del" }),
+  "diff-mod-add": view.Decoration.mark({ class: "cm-draftly-code-diff-mod-add" }),
+  "diff-mod-del": view.Decoration.mark({ class: "cm-draftly-code-diff-mod-del" }),
+  "diff-escape-hidden": view.Decoration.replace({})
 };
-var CodeBlockHeaderWidget = class extends WidgetType {
+var CodeBlockHeaderWidget = class extends view.WidgetType {
   constructor(props, codeContent) {
     super();
     this.props = props;
@@ -3838,7 +3845,7 @@ var CodeBlockHeaderWidget = class extends WidgetType {
     return false;
   }
 };
-var CodeBlockCaptionWidget = class extends WidgetType {
+var CodeBlockCaptionWidget = class extends view.WidgetType {
   constructor(caption) {
     super();
     this.caption = caption;
@@ -3859,7 +3866,7 @@ var CodeBlockCaptionWidget = class extends WidgetType {
     return false;
   }
 };
-var CodePlugin = class extends DecorationPlugin {
+var CodePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "code";
   version = "1.0.0";
   decorationPriority = 25;
@@ -3880,7 +3887,7 @@ var CodePlugin = class extends DecorationPlugin {
         name: "Inline code",
         description: "Wrap the selection in backticks",
         key: "Mod-e",
-        run: toggleMarkdownStyle("`"),
+        run: chunkPULMPDQL_cjs.toggleMarkdownStyle("`"),
         preventDefault: true
       },
       {
@@ -3899,7 +3906,7 @@ var CodePlugin = class extends DecorationPlugin {
    * with backticks (selected -> `selected`).
    */
   getExtensions() {
-    return [createWrapSelectionInputHandler({ "`": "`" })];
+    return [chunkX6JQRPQN_cjs.createWrapSelectionInputHandler({ "`": "`" })];
   }
   /**
    * Toggle code block on current line or selected lines
@@ -4065,25 +4072,25 @@ ${CODE_FENCE}`;
     }
   }
   decorateFencedCode(node, ctx) {
-    const { view, decorations } = ctx;
-    const nodeLineStart = view.state.doc.lineAt(node.from);
-    const nodeLineEnd = view.state.doc.lineAt(node.to);
+    const { view: view$1, decorations } = ctx;
+    const nodeLineStart = view$1.state.doc.lineAt(node.from);
+    const nodeLineEnd = view$1.state.doc.lineAt(node.to);
     const cursorInCodeBlock = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineEnd.to);
     const cursorOnFenceLine = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineStart.to) || ctx.selectionOverlapsRange(nodeLineEnd.from, nodeLineEnd.to);
     let infoProps = { language: "" };
     let codeContent = "";
     for (let child = node.node.firstChild; child; child = child.nextSibling) {
       if (child.name === "CodeInfo") {
-        infoProps = this.parseCodeInfo(view.state.sliceDoc(child.from, child.to).trim());
+        infoProps = this.parseCodeInfo(view$1.state.sliceDoc(child.from, child.to).trim());
       }
       if (child.name === "CodeText") {
-        codeContent = view.state.sliceDoc(child.from, child.to);
+        codeContent = view$1.state.sliceDoc(child.from, child.to);
       }
     }
     const codeLines = [];
     for (let i = nodeLineStart.number + 1; i <= nodeLineEnd.number - 1; i++) {
-      const codeLine = view.state.doc.line(i);
-      codeLines.push(view.state.sliceDoc(codeLine.from, codeLine.to));
+      const codeLine = view$1.state.doc.line(i);
+      codeLines.push(view$1.state.sliceDoc(codeLine.from, codeLine.to));
     }
     const totalCodeLines = nodeLineEnd.number - nodeLineStart.number - 1;
     const startLineNum = typeof infoProps.showLineNumbers === "number" ? infoProps.showLineNumbers : 1;
@@ -4110,7 +4117,7 @@ ${CODE_FENCE}`;
     const shouldShowCaption = !!infoProps.caption;
     if (shouldShowHeader) {
       decorations.push(
-        Decoration.widget({
+        view.Decoration.widget({
           widget: new CodeBlockHeaderWidget(infoProps, codeContent),
           block: false,
           side: -1
@@ -4119,25 +4126,25 @@ ${CODE_FENCE}`;
     }
     let codeLineIndex = 0;
     for (let lineNumber = nodeLineStart.number; lineNumber <= nodeLineEnd.number; lineNumber++) {
-      const line = view.state.doc.line(lineNumber);
+      const line = view$1.state.doc.line(lineNumber);
       const isFenceLine = lineNumber === nodeLineStart.number || lineNumber === nodeLineEnd.number;
       const relativeLineNum = displayLineNumbers[codeLineIndex] ?? startLineNum + codeLineIndex;
       decorations.push(codeMarkDecorations["code-block-line"].range(line.from));
       if (lineNumber === nodeLineStart.number) {
         decorations.push(codeMarkDecorations["code-block-line-start"].range(line.from));
         if (shouldShowHeader) {
-          decorations.push(Decoration.line({ class: "cm-draftly-code-block-has-header" }).range(line.from));
+          decorations.push(view.Decoration.line({ class: "cm-draftly-code-block-has-header" }).range(line.from));
         }
       }
       if (lineNumber === nodeLineEnd.number) {
         decorations.push(codeMarkDecorations["code-block-line-end"].range(line.from));
         if (shouldShowCaption) {
-          decorations.push(Decoration.line({ class: "cm-draftly-code-block-has-caption" }).range(line.from));
+          decorations.push(view.Decoration.line({ class: "cm-draftly-code-block-has-caption" }).range(line.from));
         }
       }
       if (!isFenceLine && infoProps.showLineNumbers && !infoProps.diff) {
         decorations.push(
-          Decoration.line({
+          view.Decoration.line({
             class: "cm-draftly-code-line-numbered",
             attributes: {
               "data-line-num": String(relativeLineNum),
@@ -4151,7 +4158,7 @@ ${CODE_FENCE}`;
         const diffState = diffStates[codeLineIndex];
         const diffMarker = diffState?.kind === "addition" ? "+" : diffState?.kind === "deletion" ? "-" : " ";
         decorations.push(
-          Decoration.line({
+          view.Decoration.line({
             class: "cm-draftly-code-line-numbered-diff",
             attributes: {
               "data-line-num-old": diffLineNumbers?.oldLine != null ? String(diffLineNumbers.oldLine) : "",
@@ -4181,7 +4188,7 @@ ${CODE_FENCE}`;
       if (!isFenceLine && infoProps.highlightText?.length) {
         this.decorateTextHighlights(
           line.from,
-          view.state.sliceDoc(line.from, line.to),
+          view$1.state.sliceDoc(line.from, line.to),
           infoProps.highlightText,
           highlightInstanceCounters,
           decorations
@@ -4194,7 +4201,7 @@ ${CODE_FENCE}`;
     this.decorateFenceMarkers(node.node, cursorOnFenceLine, decorations);
     if (infoProps.caption) {
       decorations.push(
-        Decoration.widget({
+        view.Decoration.widget({
           widget: new CodeBlockCaptionWidget(infoProps.caption),
           block: false,
           side: 1
@@ -4219,7 +4226,7 @@ ${CODE_FENCE}`;
     const diffMarker = diffState?.kind === "addition" ? "+" : diffState?.kind === "deletion" ? "-" : " ";
     if (showDiffMarkerGutter) {
       decorations.push(
-        Decoration.line({
+        view.Decoration.line({
           class: "cm-draftly-code-line-diff-gutter",
           attributes: {
             "data-diff-marker": diffMarker
@@ -4436,7 +4443,7 @@ ${CODE_FENCE}`;
     try {
       const tree = parser.parse(code);
       const highlightedLines = [""];
-      highlightCode(
+      highlight.highlightCode(
         code,
         tree,
         syntaxHighlighters && syntaxHighlighters.length > 0 ? syntaxHighlighters : [],
@@ -4459,7 +4466,7 @@ ${CODE_FENCE}`;
     const cached = this.parserCache.get(normalizedLang);
     if (cached) return cached;
     const parserPromise = (async () => {
-      const langDesc = LanguageDescription.matchLanguageName(languages, normalizedLang, true);
+      const langDesc = language.LanguageDescription.matchLanguageName(languageData.languages, normalizedLang, true);
       if (!langDesc) return null;
       if (langDesc.support) {
         return langDesc.support.language.parser;
@@ -4703,15 +4710,15 @@ ${CODE_FENCE}`;
 };
 var quoteMarkDecorations = {
   /** Decoration for the > marker */
-  "quote-mark": Decoration.replace({}),
+  "quote-mark": view.Decoration.replace({}),
   /** Decoration for the quote content */
-  "quote-content": Decoration.mark({ class: "cm-draftly-quote-content" })
+  "quote-content": view.Decoration.mark({ class: "cm-draftly-quote-content" })
 };
 var quoteLineDecorations = {
   /** Decoration for blockquote lines */
-  "quote-line": Decoration.line({ class: "cm-draftly-quote-line" })
+  "quote-line": view.Decoration.line({ class: "cm-draftly-quote-line" })
 };
-var QuotePlugin = class extends DecorationPlugin {
+var QuotePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "quote";
   version = "1.0.0";
   decorationPriority = 10;
@@ -4781,7 +4788,7 @@ var QuotePlugin = class extends DecorationPlugin {
 `;
   }
 };
-var theme9 = createTheme({
+var theme9 = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Line styling with left border
     ".cm-draftly-quote-line": {
@@ -4798,9 +4805,9 @@ var theme9 = createTheme({
     }
   }
 });
-var hrLineDecoration = Decoration.line({ class: "cm-draftly-hr-line" });
-var hrMarkDecoration = Decoration.replace({});
-var HRPlugin = class extends DecorationPlugin {
+var hrLineDecoration = view.Decoration.line({ class: "cm-draftly-hr-line" });
+var hrMarkDecoration = view.Decoration.replace({});
+var HRPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   name = "hr";
   version = "1.0.0";
   decorationPriority = 10;
@@ -4846,7 +4853,7 @@ var HRPlugin = class extends DecorationPlugin {
 `;
   }
 };
-var theme10 = createTheme({
+var theme10 = chunkPULMPDQL_cjs.createTheme({
   default: {
     // Line styling — displays a centered horizontal line
     ".cm-draftly-hr-line": {
@@ -4883,6 +4890,17 @@ function createEssentialPlugins() {
   ];
 }
 
-export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins };
-//# sourceMappingURL=chunk-HMIW4LDN.js.map
-//# sourceMappingURL=chunk-HMIW4LDN.js.map
+exports.CodePlugin = CodePlugin;
+exports.HRPlugin = HRPlugin;
+exports.HTMLPlugin = HTMLPlugin;
+exports.HeadingPlugin = HeadingPlugin;
+exports.ImagePlugin = ImagePlugin;
+exports.InlinePlugin = InlinePlugin;
+exports.LinkPlugin = LinkPlugin;
+exports.ListPlugin = ListPlugin;
+exports.ParagraphPlugin = ParagraphPlugin;
+exports.QuotePlugin = QuotePlugin;
+exports.TablePlugin = TablePlugin;
+exports.createEssentialPlugins = createEssentialPlugins;
+//# sourceMappingURL=chunk-DDRW2SA3.cjs.map
+//# sourceMappingURL=chunk-DDRW2SA3.cjs.map

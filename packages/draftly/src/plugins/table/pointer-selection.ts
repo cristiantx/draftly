@@ -19,13 +19,14 @@ function pointerPosition(view: EditorView, event: MouseEvent): number | null {
   }
   let x = event.clientX;
   let y = event.clientY;
-  // A short cell shares the height of wrapped neighbors. Clamp padding clicks to
-  // the nearest rendered text rectangle before asking for a native caret.
+  // Pick the visual line before choosing text within it. Euclidean distance can
+  // favor a longer line above a click in the blank tail of a short wrapped line.
   if (cell) {
     const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
     let text = walker.nextNode();
     let nearest: DOMRect | null = null;
-    let distance = Infinity;
+    let horizontalDistance = Infinity;
+    let verticalDistance = Infinity;
     while (text) {
       if (text.textContent?.length) {
         const textRange = document.createRange();
@@ -34,16 +35,16 @@ function pointerPosition(view: EditorView, event: MouseEvent): number | null {
           if (!rect.width || !rect.height) continue;
           const dx = Math.max(rect.left - x, 0, x - rect.right);
           const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-          const next = dx * dx + dy * dy;
-          if (next < distance) {
+          if (dy < verticalDistance || (dy === verticalDistance && dx < horizontalDistance)) {
             nearest = rect;
-            distance = next;
+            verticalDistance = dy;
+            horizontalDistance = dx;
           }
         }
       }
       text = walker.nextNode();
     }
-    if (nearest && distance > 0) {
+    if (nearest && (verticalDistance > 0 || horizontalDistance > 0)) {
       x = Math.max(nearest.left + 0.1, Math.min(x, nearest.right - 0.1));
       y = Math.max(nearest.top + 0.1, Math.min(y, nearest.bottom - 0.1));
     }

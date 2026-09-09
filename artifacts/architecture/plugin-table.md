@@ -1,6 +1,7 @@
 # Table Plugin (deep dive)
 
-> Last verified: 2026-08-18 · commit `eae4434`
+> Pointer hit-testing verified: 2026-09-09 · base commit `ef273c7` plus wrapped-cell pointer fix.
+> Other sections last verified: 2026-08-18 · commit `eae4434`
 > Source: `packages/draftly/src/plugins/table-plugin.ts` (1759 LOC) · plugin version `2.0.0`
 
 The most complex plugin in the codebase and the most recently reworked
@@ -209,6 +210,17 @@ If a key works in one context and not another, check whether it is registered on
 ---
 
 ## Text handling rules
+
+### Pointer hit-testing
+
+`table/pointer-selection.ts` maps native DOM caret boundaries through `posAtDOM`.
+For cell padding and blank line tails, it first chooses the nearest visual line by
+vertical distance, then the nearest text rectangle horizontally. A combined Euclidean
+distance is incorrect: a long line above can win over the short final line beside a click.
+CodeMirror owns gesture tracking, drag/Shift/multiple selections, and document-change
+mapping of gesture anchors. This path does not format or otherwise change Markdown.
+
+### Source text
 
 - **Pipes** — `isEscaped()` / `getPipePositions()` respect backslash escapes throughout;
   `escapeUnescapedPipes()` escapes user-typed `|` inside cell content.

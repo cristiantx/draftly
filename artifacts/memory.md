@@ -1,6 +1,6 @@
 # Agent Memory
 
-> Last verified: 2026-09-09 · commit `754465b` plus final rebuilt interaction worktree.
+> Last verified: 2026-09-09 · base commit `ef273c7` plus wrapped-cell pointer fix.
 
 > Cross-session memory for agents working on Draftly.
 > Append newest sessions at the top of the log. Keep entries short and durable — record
@@ -47,6 +47,11 @@ Distilled from all sessions. Highest-value context, kept short deliberately.
   `base` **plus** its framework layer — `base` is not implied by the others.
 
 ### Traps that have cost time
+
+- **Table pointer regression tests must click blank line tails, not only glyphs.**
+  Native glyph clicks and left-padding clicks passed while a short last line still sent
+  blank-tail clicks upward. The `Cancelled by card?` reproduction is retained in Pluma's
+  `tests/interaction/tableWhitespace*` tests, including exact source insertion and Electron.
 
 - **`requiredNodes` is the preview dispatch key.** A plugin with `renderToHTML()` but an
   empty `requiredNodes` is silently dead in preview. First thing to check when something

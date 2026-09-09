@@ -1,5 +1,5 @@
 export { generateCSS, preview } from './chunk-G7MV7GLC.js';
-export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins } from './chunk-HMIW4LDN.js';
+export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins } from './chunk-XZ4AWGRF.js';
 export { PreviewRenderer, defaultRenderers, generateSyntaxThemeCSS } from './chunk-LB72KTUD.js';
 export { createWrapSelectionInputHandler, displayWidth, isSafeUrl, safeUrl } from './chunk-QATV5LYI.js';
 export { resolveWidgetRange, shallowEqualRecord } from './chunk-CI47THVM.js';

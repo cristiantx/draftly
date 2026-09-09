@@ -1,4 +1,4 @@
-export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins } from '../chunk-HMIW4LDN.js';
+export { CodePlugin, HRPlugin, HTMLPlugin, HeadingPlugin, ImagePlugin, InlinePlugin, LinkPlugin, ListPlugin, ParagraphPlugin, QuotePlugin, TablePlugin, createEssentialPlugins } from '../chunk-XZ4AWGRF.js';
 import '../chunk-LB72KTUD.js';
 import '../chunk-QATV5LYI.js';
 import '../chunk-CI47THVM.js';
