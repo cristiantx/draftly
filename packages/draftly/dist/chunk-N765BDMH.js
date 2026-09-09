@@ -1,25 +1,23 @@
-'use strict';
+import { createTheme, selectionOverlapsRange, cursorInRange, markdownResetExtension, draftlyBaseTheme } from './chunk-XRXGYUPJ.js';
+import { isDevMode, reportOnce } from './chunk-ONHEBAB4.js';
+import { Facet, RangeSetBuilder, Prec } from '@codemirror/state';
+import { ViewPlugin, EditorView, keymap, highlightActiveLine } from '@codemirror/view';
+import { markdown, markdownLanguage, markdownKeymap } from '@codemirror/lang-markdown';
+import { syntaxTree, syntaxTreeAvailable, indentOnInput } from '@codemirror/language';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { languages } from '@codemirror/language-data';
+import { StyleModule } from 'style-mod';
 
-var chunkPULMPDQL_cjs = require('./chunk-PULMPDQL.cjs');
-var chunkQFIW5FJA_cjs = require('./chunk-QFIW5FJA.cjs');
-var state = require('@codemirror/state');
-var view = require('@codemirror/view');
-var langMarkdown = require('@codemirror/lang-markdown');
-var language = require('@codemirror/language');
-var commands = require('@codemirror/commands');
-var languageData = require('@codemirror/language-data');
-var styleMod = require('style-mod');
-
-var DraftlyPluginsFacet = state.Facet.define({
+var DraftlyPluginsFacet = Facet.define({
   combine: (values) => values.flat()
 });
-var draftlyOnNodesChangeFacet = state.Facet.define({
+var draftlyOnNodesChangeFacet = Facet.define({
   combine: (values) => values.find((v) => v !== void 0)
 });
-var draftlyOnPluginErrorFacet = state.Facet.define({
+var draftlyOnPluginErrorFacet = Facet.define({
   combine: (values) => values.find((v) => v !== void 0)
 });
-var draftlyThemeFacet = state.Facet.define({
+var draftlyThemeFacet = Facet.define({
   combine: (values) => values.find((v) => v !== void 0) || "auto" /* AUTO */
 });
 function resolveVisibleRanges(view) {
@@ -28,7 +26,7 @@ function resolveVisibleRanges(view) {
 }
 function createVisibleIterator(view, ranges) {
   return (spec) => {
-    const tree = language.syntaxTree(view.state);
+    const tree = syntaxTree(view.state);
     const leave = spec.leave ?? (() => {
     });
     const first = ranges[0];
@@ -36,31 +34,38 @@ function createVisibleIterator(view, ranges) {
       tree.iterate({ from: first.from, to: first.to, enter: spec.enter, leave });
       return;
     }
-    const seen = /* @__PURE__ */ new Set();
-    for (const { from, to } of ranges) {
+    const open = /* @__PURE__ */ new Map();
+    for (let index = 0; index < ranges.length; index++) {
+      const { from, to } = ranges[index];
+      const next = ranges[index + 1];
       tree.iterate({
         from,
         to,
         enter: (node) => {
           const key = `${node.from}:${node.to}:${node.name}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return spec.enter(node);
+          if (open.has(key)) return open.get(key) ? void 0 : false;
+          const result = spec.enter(node);
+          open.set(key, result !== false);
+          return result;
         },
-        leave
+        leave: (node) => {
+          if (next && node.to >= next.from) return;
+          open.set(`${node.from}:${node.to}:${node.name}`, false);
+          leave(node);
+        }
       });
     }
   };
 }
 function isReportableDecorationError(view) {
-  return language.syntaxTreeAvailable(view.state, view.viewport.to);
+  return syntaxTreeAvailable(view.state, view.viewport.to);
 }
 function reportDecorationError(view, plugin, error) {
   if (!isReportableDecorationError(view)) return;
   const handler = view.state.facet(draftlyOnPluginErrorFacet);
-  if (!handler && !chunkQFIW5FJA_cjs.isDevMode()) return;
+  if (!handler && !isDevMode()) return;
   const message = error instanceof Error ? error.message : String(error);
-  chunkQFIW5FJA_cjs.reportOnce(`${plugin.name}\0${message}`, () => {
+  reportOnce(`${plugin.name}\0${message}`, () => {
     if (handler) {
       handler(plugin.name, error);
     } else {
@@ -69,7 +74,7 @@ function reportDecorationError(view, plugin, error) {
   });
 }
 function buildDecorations(view, plugins = []) {
-  const builder = new state.RangeSetBuilder();
+  const builder = new RangeSetBuilder();
   const decorations = [];
   if (plugins.length > 0) {
     const visibleRanges = resolveVisibleRanges(view);
@@ -78,8 +83,8 @@ function buildDecorations(view, plugins = []) {
       decorations,
       visibleRanges,
       iterateVisible: createVisibleIterator(view, visibleRanges),
-      selectionOverlapsRange: (from, to) => chunkPULMPDQL_cjs.selectionOverlapsRange(view, from, to),
-      cursorInRange: (from, to) => chunkPULMPDQL_cjs.cursorInRange(view, from, to)
+      selectionOverlapsRange: (from, to) => selectionOverlapsRange(view, from, to),
+      cursorInRange: (from, to) => cursorInRange(view, from, to)
     };
     const sortedPlugins = [...plugins].sort((a, b) => a.decorationPriority - b.decorationPriority);
     for (const plugin of sortedPlugins) {
@@ -137,7 +142,7 @@ var draftlyViewPluginClass = class {
     for (const plugin of this.plugins) {
       plugin.onViewUpdate(update);
     }
-    if (update.docChanged || update.selectionSet || update.viewportChanged || update.startState.facet(DraftlyPluginsFacet) !== this.plugins || language.syntaxTree(update.startState) !== language.syntaxTree(update.state)) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.startState.facet(DraftlyPluginsFacet) !== this.plugins || syntaxTree(update.startState) !== syntaxTree(update.state)) {
       this.decorations = buildDecorations(update.view, this.plugins);
       if (this.onNodesChange) {
         this.onNodesChange(this.buildNodes(update.view));
@@ -166,7 +171,7 @@ var draftlyViewPluginClass = class {
     }
   }
   buildNodes(view) {
-    const tree = language.syntaxTree(view.state);
+    const tree = syntaxTree(view.state);
     const roots = [];
     const stack = [];
     tree.iterate({
@@ -176,7 +181,7 @@ var draftlyViewPluginClass = class {
           to: nodeRef.to,
           name: nodeRef.name,
           children: [],
-          isSelected: chunkPULMPDQL_cjs.selectionOverlapsRange(view, nodeRef.from, nodeRef.to)
+          isSelected: selectionOverlapsRange(view, nodeRef.from, nodeRef.to)
         };
         if (stack.length > 0) {
           stack[stack.length - 1].children.push(node);
@@ -192,11 +197,11 @@ var draftlyViewPluginClass = class {
     return roots;
   }
 };
-var draftlyViewPlugin = view.ViewPlugin.fromClass(draftlyViewPluginClass, {
+var draftlyViewPlugin = ViewPlugin.fromClass(draftlyViewPluginClass, {
   decorations: (v) => v.decorations,
   provide: () => []
 });
-var draftlyEditorClass = view.EditorView.editorAttributes.of({ class: "cm-draftly" });
+var draftlyEditorClass = EditorView.editorAttributes.of({ class: "cm-draftly" });
 function createDraftlyViewExtension(theme = "auto" /* AUTO */, baseStyles = true, plugins = [], onNodesChange, onPluginError) {
   return [
     draftlyEditorClass,
@@ -205,7 +210,7 @@ function createDraftlyViewExtension(theme = "auto" /* AUTO */, baseStyles = true
     draftlyOnPluginErrorFacet.of(onPluginError),
     draftlyThemeFacet.of(theme),
     draftlyViewPlugin,
-    ...baseStyles ? [chunkPULMPDQL_cjs.draftlyBaseTheme(theme)] : []
+    ...baseStyles ? [draftlyBaseTheme(theme)] : []
   ];
 }
 var themeCache = /* @__PURE__ */ new WeakMap();
@@ -231,7 +236,7 @@ function pluginThemeExtension(plugin, theme) {
   const { extensions } = entryFor(plugin);
   let extension = extensions.get(theme);
   if (!extension) {
-    extension = view.EditorView.theme(resolvePluginTheme(plugin, theme));
+    extension = EditorView.theme(resolvePluginTheme(plugin, theme));
     extensions.set(theme, extension);
   }
   return extension;
@@ -282,46 +287,46 @@ function draftly(config = {}) {
   if (config.markdown) {
     markdownExtensions.push(...config.markdown);
   }
-  const markdownSupport = langMarkdown.markdown({
-    base: langMarkdown.markdownLanguage,
-    codeLanguages: languageData.languages,
+  const markdownSupport = markdown({
+    base: markdownLanguage,
+    codeLanguages: languages,
     extensions: markdownExtensions,
     addKeymap: true,
     completeHTMLTags: true,
     pasteURLAsLink: true
   });
   const baseExtensions = [
-    ...defaultKeybindings ? [view.keymap.of(commands.defaultKeymap)] : [],
-    ...configHistory ? [commands.history(), view.keymap.of(commands.historyKeymap)] : [],
-    ...configIndentWithTab ? [language.indentOnInput(), view.keymap.of([commands.indentWithTab])] : [],
-    ...configHighlightActiveLine && disableViewPlugin ? [view.highlightActiveLine()] : []
+    ...defaultKeybindings ? [keymap.of(defaultKeymap)] : [],
+    ...configHistory ? [history(), keymap.of(historyKeymap)] : [],
+    ...configIndentWithTab ? [indentOnInput(), keymap.of([indentWithTab])] : [],
+    ...configHighlightActiveLine && disableViewPlugin ? [highlightActiveLine()] : []
   ];
   const draftlyExtensions = [];
   if (!disableViewPlugin) {
     draftlyExtensions.push(
       createDraftlyViewExtension(configTheme, baseStyles, allPlugins, configOnNodesChange, configOnPluginError)
     );
-    draftlyExtensions.push(state.Prec.highest(chunkPULMPDQL_cjs.markdownResetExtension));
+    draftlyExtensions.push(Prec.highest(markdownResetExtension));
   }
-  if (!disableViewPlugin || configLineWrapping) draftlyExtensions.push(view.EditorView.lineWrapping);
+  if (!disableViewPlugin || configLineWrapping) draftlyExtensions.push(EditorView.lineWrapping);
   const composedExtensions = [
     // Core markdown support (highest priority)
-    state.Prec.high(markdownSupport),
-    state.Prec.high(view.keymap.of(langMarkdown.markdownKeymap)),
+    Prec.high(markdownSupport),
+    Prec.high(keymap.of(markdownKeymap)),
     // draftly view plugin for rich rendering
     draftlyExtensions,
     // Core CodeMirror extensions
     baseExtensions,
     // Plugin extensions & keymaps
     pluginExtensions,
-    pluginKeymaps.length > 0 ? view.keymap.of(pluginKeymaps) : [],
+    pluginKeymaps.length > 0 ? keymap.of(pluginKeymaps) : [],
     // Config keymaps & extensions
-    configKeymap.length > 0 ? view.keymap.of(configKeymap) : [],
+    configKeymap.length > 0 ? keymap.of(configKeymap) : [],
     extensions
   ];
   return composedExtensions;
 }
-var emptyThemeResolver = chunkPULMPDQL_cjs.createTheme({
+var emptyThemeResolver = createTheme({
   default: {},
   dark: {},
   light: {}
@@ -517,12 +522,12 @@ var DraftlyPlugin = class {
    * Uses cssClassMap to convert CM selectors to semantic selectors
    */
   transformToCss(themeStyles, wrapperClass) {
-    const styleMod$1 = new styleMod.StyleModule(themeStyles, {
+    const styleMod = new StyleModule(themeStyles, {
       finish: (sel) => {
         return `.${wrapperClass} ${sel}`;
       }
     });
-    return styleMod$1.getRules();
+    return styleMod.getRules();
   }
 };
 var DecorationPlugin = class extends DraftlyPlugin {
@@ -550,12 +555,6 @@ function collectShortcuts(plugins) {
   return shortcuts;
 }
 
-exports.DecorationPlugin = DecorationPlugin;
-exports.DraftlyPlugin = DraftlyPlugin;
-exports.SyntaxPlugin = SyntaxPlugin;
-exports.collectShortcuts = collectShortcuts;
-exports.draftly = draftly;
-exports.draftlyOnPluginErrorFacet = draftlyOnPluginErrorFacet;
-exports.draftlyThemeFacet = draftlyThemeFacet;
-//# sourceMappingURL=chunk-3TJPHTNQ.cjs.map
-//# sourceMappingURL=chunk-3TJPHTNQ.cjs.map
+export { DecorationPlugin, DraftlyPlugin, SyntaxPlugin, collectShortcuts, draftly, draftlyOnPluginErrorFacet, draftlyThemeFacet };
+//# sourceMappingURL=chunk-N765BDMH.js.map
+//# sourceMappingURL=chunk-N765BDMH.js.map

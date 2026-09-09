@@ -1,6 +1,7 @@
 # Editor Core
 
-> Last verified: 2026-08-18 · commit `eae4434`
+> Visible-range traversal verified: 2026-09-09 · base commit `77e34a2` plus C-034
+> Other sections last verified: 2026-08-18 · commit `eae4434`
 > Covers `packages/draftly/src/editor/` except the plugin contract itself
 > (see [plugin-system.md](./plugin-system.md)) and theming (see [theming.md](./theming.md)).
 
@@ -124,7 +125,10 @@ Four things worth internalising:
   in the context rather than in each plugin is what stops the next plugin repeating it.
   Lezer yields nodes that *overlap* the bounds, so a construct straddling the viewport
   edge is entered and decorated in full. When the viewport is split into several ranges,
-  `iterateVisible` deduplicates nodes spanning a gap.
+  `iterateVisible` deduplicates nodes spanning a gap without pruning open shared
+  ancestors. Its map distinguishes open nodes from pruned/completed subtrees. Leave
+  callbacks wait for the final intersecting range, preserving balanced nesting. Pruning
+  an already-seen Document node would silently skip every later range (fixed in C-034).
 - **Plugins push into a shared array.** They do not return decorations. This lets several
   plugins decorate overlapping ranges without any of them knowing about the others.
 - **Sorting is centralised.** A plugin may push in whatever order is convenient for its

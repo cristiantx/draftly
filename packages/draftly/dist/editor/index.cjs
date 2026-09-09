@@ -1,6 +1,6 @@
 'use strict';
 
-var chunk3TJPHTNQ_cjs = require('../chunk-3TJPHTNQ.cjs');
+var chunkOCI3S4CF_cjs = require('../chunk-OCI3S4CF.cjs');
 var chunkPULMPDQL_cjs = require('../chunk-PULMPDQL.cjs');
 require('../chunk-QFIW5FJA.cjs');
 
@@ -8,23 +8,23 @@ require('../chunk-QFIW5FJA.cjs');
 
 Object.defineProperty(exports, "DecorationPlugin", {
   enumerable: true,
-  get: function () { return chunk3TJPHTNQ_cjs.DecorationPlugin; }
+  get: function () { return chunkOCI3S4CF_cjs.DecorationPlugin; }
 });
 Object.defineProperty(exports, "DraftlyPlugin", {
   enumerable: true,
-  get: function () { return chunk3TJPHTNQ_cjs.DraftlyPlugin; }
+  get: function () { return chunkOCI3S4CF_cjs.DraftlyPlugin; }
 });
 Object.defineProperty(exports, "SyntaxPlugin", {
   enumerable: true,
-  get: function () { return chunk3TJPHTNQ_cjs.SyntaxPlugin; }
+  get: function () { return chunkOCI3S4CF_cjs.SyntaxPlugin; }
 });
 Object.defineProperty(exports, "collectShortcuts", {
   enumerable: true,
-  get: function () { return chunk3TJPHTNQ_cjs.collectShortcuts; }
+  get: function () { return chunkOCI3S4CF_cjs.collectShortcuts; }
 });
 Object.defineProperty(exports, "draftly", {
   enumerable: true,
-  get: function () { return chunk3TJPHTNQ_cjs.draftly; }
+  get: function () { return chunkOCI3S4CF_cjs.draftly; }
 });
 Object.defineProperty(exports, "ThemeEnum", {
   enumerable: true,

@@ -48,6 +48,11 @@ Distilled from all sessions. Highest-value context, kept short deliberately.
 
 ### Traps that have cost time
 
+- **A repeated tree ancestor is not necessarily a completed subtree.** Visible source
+  ranges can split around block widgets AND an offscreen caret. Skipping a previously
+  seen Document node drops every later range's decorations. Preserve traversal through
+  open ancestors, deduplicate callbacks, and defer leave until their final visible range.
+
 - **Correct table source insertion does not prove correct caret geometry.** At a cell's
   content end, association 0 can resolve to a zero rectangle and +1 to a zero-height
   table edge; -1 resolves to the visible glyph. The same bad rectangle drives typing

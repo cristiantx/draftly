@@ -1,6 +1,6 @@
 import { createWrapSelectionInputHandler } from './chunk-QATV5LYI.js';
 import { resolveWidgetRange } from './chunk-CI47THVM.js';
-import { DecorationPlugin } from './chunk-7XQEHFZX.js';
+import { DecorationPlugin } from './chunk-N765BDMH.js';
 import { createTheme } from './chunk-XRXGYUPJ.js';
 import { Decoration, WidgetType } from '@codemirror/view';
 import { parseMixed } from '@lezer/common';
@@ -429,5 +429,5 @@ var theme = createTheme({
 });
 
 export { MathPlugin, latexHighlightTags };
-//# sourceMappingURL=chunk-UVWPHNAA.js.map
-//# sourceMappingURL=chunk-UVWPHNAA.js.map
+//# sourceMappingURL=chunk-S2Z2MX6Z.js.map
+//# sourceMappingURL=chunk-S2Z2MX6Z.js.map

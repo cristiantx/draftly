@@ -1,6 +1,6 @@
 'use strict';
 
-var chunk3TJPHTNQ_cjs = require('./chunk-3TJPHTNQ.cjs');
+var chunkOCI3S4CF_cjs = require('./chunk-OCI3S4CF.cjs');
 var chunkPULMPDQL_cjs = require('./chunk-PULMPDQL.cjs');
 var view = require('@codemirror/view');
 var emoji = require('node-emoji');
@@ -50,7 +50,7 @@ var EmojiWidget = class extends view.WidgetType {
 var emojiMarkDecorations = {
   "emoji-source": view.Decoration.mark({ class: "cm-draftly-emoji-source" })
 };
-var EmojiPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
+var EmojiPlugin = class extends chunkOCI3S4CF_cjs.DecorationPlugin {
   name = "emoji";
   version = "1.0.0";
   decorationPriority = 20;
@@ -123,5 +123,5 @@ var theme = chunkPULMPDQL_cjs.createTheme({
 });
 
 exports.EmojiPlugin = EmojiPlugin;
-//# sourceMappingURL=chunk-7BSQYD3N.cjs.map
-//# sourceMappingURL=chunk-7BSQYD3N.cjs.map
+//# sourceMappingURL=chunk-3XJSYVDN.cjs.map
+//# sourceMappingURL=chunk-3XJSYVDN.cjs.map

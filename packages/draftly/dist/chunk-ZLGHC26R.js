@@ -1,4 +1,4 @@
-import { DecorationPlugin } from './chunk-7XQEHFZX.js';
+import { DecorationPlugin } from './chunk-N765BDMH.js';
 import { createTheme } from './chunk-XRXGYUPJ.js';
 import { Decoration, WidgetType } from '@codemirror/view';
 import * as emoji from 'node-emoji';
@@ -101,5 +101,5 @@ var theme = createTheme({
 });
 
 export { EmojiPlugin };
-//# sourceMappingURL=chunk-EXLBMIGJ.js.map
-//# sourceMappingURL=chunk-EXLBMIGJ.js.map
+//# sourceMappingURL=chunk-ZLGHC26R.js.map
+//# sourceMappingURL=chunk-ZLGHC26R.js.map

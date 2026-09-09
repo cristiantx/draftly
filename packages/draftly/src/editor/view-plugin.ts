@@ -64,10 +64,10 @@ function resolveVisibleRanges(view: EditorView): readonly { readonly from: numbe
  * still entered and decorated in full.
  *
  * When the viewport is split into several ranges, a node spanning the gap would be
- * entered once per range and its decorations pushed twice. The `seen` set collapses
- * that; returning `false` on a repeat also skips the subtree, whose nodes were seen for
- * the same reason. The set is only allocated when there is more than one range, which is
- * the uncommon case.
+ * entered once per range and its decorations pushed twice. Track whether previously
+ * entered nodes still have visible descendants to visit. Repeated ancestors must stay
+ * traversable: skipping the Document node would hide every range after the first.
+ * Defer their leave callbacks until the final intersecting range to keep nesting balanced.
  *
  * @param view - The EditorView instance
  * @param ranges - Ranges from {@link resolveVisibleRanges}
@@ -90,18 +90,25 @@ function createVisibleIterator(
       return;
     }
 
-    const seen = new Set<string>();
-    for (const { from, to } of ranges) {
+    const open = new Map<string, boolean>();
+    for (let index = 0; index < ranges.length; index++) {
+      const { from, to } = ranges[index]!;
+      const next = ranges[index + 1];
       tree.iterate({
         from,
         to,
         enter: (node) => {
           const key = `${node.from}:${node.to}:${node.name}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return spec.enter(node);
+          if (open.has(key)) return open.get(key) ? undefined : false;
+          const result = spec.enter(node);
+          open.set(key, result !== false);
+          return result;
         },
-        leave,
+        leave: (node) => {
+          if (next && node.to >= next.from) return;
+          open.set(`${node.from}:${node.to}:${node.name}`, false);
+          leave(node);
+        },
       });
     }
   };

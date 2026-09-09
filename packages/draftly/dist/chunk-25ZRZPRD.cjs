@@ -2,7 +2,7 @@
 
 var chunkX6JQRPQN_cjs = require('./chunk-X6JQRPQN.cjs');
 var chunkXQHP5MJD_cjs = require('./chunk-XQHP5MJD.cjs');
-var chunk3TJPHTNQ_cjs = require('./chunk-3TJPHTNQ.cjs');
+var chunkOCI3S4CF_cjs = require('./chunk-OCI3S4CF.cjs');
 var chunkPULMPDQL_cjs = require('./chunk-PULMPDQL.cjs');
 var view = require('@codemirror/view');
 var common = require('@lezer/common');
@@ -222,7 +222,7 @@ var mathBlockParser = {
     return true;
   }
 };
-var MathPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
+var MathPlugin = class extends chunkOCI3S4CF_cjs.DecorationPlugin {
   name = "math";
   version = "1.0.0";
   decorationPriority = 25;
@@ -436,5 +436,5 @@ var theme = chunkPULMPDQL_cjs.createTheme({
 
 exports.MathPlugin = MathPlugin;
 exports.latexHighlightTags = latexHighlightTags;
-//# sourceMappingURL=chunk-A3MEDSTQ.cjs.map
-//# sourceMappingURL=chunk-A3MEDSTQ.cjs.map
+//# sourceMappingURL=chunk-25ZRZPRD.cjs.map
+//# sourceMappingURL=chunk-25ZRZPRD.cjs.map

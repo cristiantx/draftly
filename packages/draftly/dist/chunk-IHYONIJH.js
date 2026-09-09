@@ -1,24 +1,18 @@
-'use strict';
-
-var chunkXQHP5MJD_cjs = require('./chunk-XQHP5MJD.cjs');
-var chunkFAW6KSSV_cjs = require('./chunk-FAW6KSSV.cjs');
-var chunk3TJPHTNQ_cjs = require('./chunk-3TJPHTNQ.cjs');
-var chunkPULMPDQL_cjs = require('./chunk-PULMPDQL.cjs');
-var view = require('@codemirror/view');
-var highlight = require('@lezer/highlight');
-var state = require('@codemirror/state');
-var language = require('@codemirror/language');
-var mermaid = require('mermaid');
-
-function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
-
-var mermaid__default = /*#__PURE__*/_interopDefault(mermaid);
+import { shallowEqualRecord, resolveWidgetRange } from './chunk-CI47THVM.js';
+import { escapeHtml } from './chunk-LUQ5Q6D7.js';
+import { DecorationPlugin, draftlyThemeFacet, draftlyOnPluginErrorFacet } from './chunk-N765BDMH.js';
+import { createTheme } from './chunk-XRXGYUPJ.js';
+import { Decoration, EditorView, WidgetType } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
+import { StateField } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
+import mermaid from 'mermaid';
 
 var mermaidInitialized = false;
 function ensureMermaidInitialized() {
   if (mermaidInitialized) return;
   mermaidInitialized = true;
-  mermaid__default.default.initialize({
+  mermaid.initialize({
     startOnLoad: false,
     theme: "default",
     suppressErrorRendering: true
@@ -54,7 +48,7 @@ async function renderMermaidUncached(definition, options = {}, defaultTheme = "d
       finalDefinition = `%%{init: ${jsonConfig} }%%
 ${definition}`;
     }
-    const { svg } = await mermaid__default.default.render(id, finalDefinition);
+    const { svg } = await mermaid.render(id, finalDefinition);
     return { svg, error: null };
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : "Unknown error";
@@ -70,7 +64,7 @@ function parseAttributes(fenceLine) {
   }
   return attributes;
 }
-var MermaidBlockWidget = class extends view.WidgetType {
+var MermaidBlockWidget = class extends WidgetType {
   constructor(definition, attributes, defaultTheme, from, to, activation = "select") {
     super();
     this.definition = definition;
@@ -89,7 +83,7 @@ var MermaidBlockWidget = class extends view.WidgetType {
    * mermaid.render() on every keystroke, flashing "Rendering diagram…" as it went. The handlers resolve the range from the live DOM instead.
    */
   eq(other) {
-    return other.activation === this.activation && other.definition === this.definition && other.defaultTheme === this.defaultTheme && chunkXQHP5MJD_cjs.shallowEqualRecord(other.attributes, this.attributes);
+    return other.activation === this.activation && other.definition === this.definition && other.defaultTheme === this.defaultTheme && shallowEqualRecord(other.attributes, this.attributes);
   }
   /**
    * Set by {@link destroy}. `mermaid.render()` is async and routinely outlives the
@@ -119,8 +113,8 @@ var MermaidBlockWidget = class extends view.WidgetType {
       }
       if (error) {
         div.classList.add("cm-draftly-mermaid-error");
-        div.innerHTML = `<span role="alert">[Mermaid Error: ${chunkFAW6KSSV_cjs.escapeHtml(error)}]</span>`;
-        view.state.facet(chunk3TJPHTNQ_cjs.draftlyOnPluginErrorFacet)?.("mermaid", new Error(error));
+        div.innerHTML = `<span role="alert">[Mermaid Error: ${escapeHtml(error)}]</span>`;
+        view.state.facet(draftlyOnPluginErrorFacet)?.("mermaid", new Error(error));
       } else {
         div.innerHTML = svg;
         const diagram = div.querySelector("svg");
@@ -133,7 +127,7 @@ var MermaidBlockWidget = class extends view.WidgetType {
     div.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const range = chunkXQHP5MJD_cjs.resolveWidgetRange(view, div, ["MermaidBlock"]) ?? { from: this.from, to: this.to };
+      const range = resolveWidgetRange(view, div, ["MermaidBlock"]) ?? { from: this.from, to: this.to };
       view.dispatch({
         selection: this.activation === "caret" ? { anchor: Math.min(view.state.doc.lineAt(range.from).to + 1, range.to) } : { anchor: range.from, head: range.to },
         scrollIntoView: true
@@ -150,7 +144,7 @@ var MermaidBlockWidget = class extends view.WidgetType {
 // src/plugins/mermaid/blocks.ts
 function readDiagrams(state) {
   const diagrams = [];
-  language.syntaxTree(state).iterate({
+  syntaxTree(state).iterate({
     enter(node) {
       if (node.name !== "MermaidBlock") return;
       const lines = state.sliceDoc(node.from, node.to).split("\n");
@@ -167,8 +161,8 @@ function readDiagrams(state) {
 }
 function createMermaidBlocks(activation) {
   const decorate = (state, diagrams) => {
-    const theme2 = state.facet(chunk3TJPHTNQ_cjs.draftlyThemeFacet) === "dark" /* DARK */ ? "dark" : "default";
-    return view.Decoration.set(
+    const theme2 = state.facet(draftlyThemeFacet) === "dark" /* DARK */ ? "dark" : "default";
+    return Decoration.set(
       diagrams.map((diagram) => {
         const expanded = state.selection.ranges.some((range) => range.from <= diagram.to && range.to >= diagram.from);
         const widget = new MermaidBlockWidget(
@@ -179,34 +173,34 @@ function createMermaidBlocks(activation) {
           diagram.to,
           activation
         );
-        return expanded ? view.Decoration.widget({ widget, block: true, side: 1 }).range(diagram.to) : view.Decoration.replace({ widget, block: true, inclusive: false }).range(diagram.from, diagram.to);
+        return expanded ? Decoration.widget({ widget, block: true, side: 1 }).range(diagram.to) : Decoration.replace({ widget, block: true, inclusive: false }).range(diagram.from, diagram.to);
       }),
       true
     );
   };
-  return state.StateField.define({
+  return StateField.define({
     create(state) {
       const diagrams = readDiagrams(state);
       return { diagrams, decorations: decorate(state, diagrams) };
     },
     update(value, transaction) {
-      const parsed = transaction.docChanged || language.syntaxTree(transaction.startState) !== language.syntaxTree(transaction.state);
+      const parsed = transaction.docChanged || syntaxTree(transaction.startState) !== syntaxTree(transaction.state);
       if (!parsed && !transaction.selection && !transaction.reconfigured) return value;
       const diagrams = parsed ? readDiagrams(transaction.state) : value.diagrams;
       return { diagrams, decorations: decorate(transaction.state, diagrams) };
     },
-    provide: (field) => view.EditorView.decorations.from(field, (value) => value.decorations)
+    provide: (field) => EditorView.decorations.from(field, (value) => value.decorations)
   });
 }
 
 // src/plugins/mermaid-plugin.ts
 var mermaidMarkDecorations = {
-  "mermaid-block-start": view.Decoration.line({ class: "cm-draftly-mermaid-block-start" }),
-  "mermaid-block-end": view.Decoration.line({ class: "cm-draftly-mermaid-block-end" }),
-  "mermaid-block": view.Decoration.line({ class: "cm-draftly-mermaid-block" }),
-  "mermaid-block-rendered": view.Decoration.line({ class: "cm-draftly-mermaid-block-rendered" }),
-  "mermaid-marker": view.Decoration.mark({ class: "cm-draftly-mermaid-marker" }),
-  "mermaid-hidden": view.Decoration.mark({ class: "cm-draftly-mermaid-hidden" })
+  "mermaid-block-start": Decoration.line({ class: "cm-draftly-mermaid-block-start" }),
+  "mermaid-block-end": Decoration.line({ class: "cm-draftly-mermaid-block-end" }),
+  "mermaid-block": Decoration.line({ class: "cm-draftly-mermaid-block" }),
+  "mermaid-block-rendered": Decoration.line({ class: "cm-draftly-mermaid-block-rendered" }),
+  "mermaid-marker": Decoration.mark({ class: "cm-draftly-mermaid-marker" }),
+  "mermaid-hidden": Decoration.mark({ class: "cm-draftly-mermaid-hidden" })
 };
 var mermaidBlockParser = {
   name: "MermaidBlock",
@@ -240,7 +234,7 @@ var mermaidBlockParser = {
     return true;
   }
 };
-var MermaidPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
+var MermaidPlugin = class extends DecorationPlugin {
   constructor(options = {}) {
     super();
     this.options = options;
@@ -266,7 +260,7 @@ var MermaidPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
     return {
       defineNodes: [
         { name: "MermaidBlock", block: true },
-        { name: "MermaidBlockMark", style: highlight.tags.processingInstruction }
+        { name: "MermaidBlockMark", style: tags.processingInstruction }
       ],
       parseBlock: [mermaidBlockParser]
     };
@@ -275,20 +269,20 @@ var MermaidPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
    * Build decorations for mermaid blocks
    */
   buildDecorations(ctx) {
-    const { view: view$1, decorations } = ctx;
+    const { view, decorations } = ctx;
     ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
         if (name === "MermaidBlock") {
-          const nodeLineStart = view$1.state.doc.lineAt(from);
-          const nodeLineEnd = view$1.state.doc.lineAt(to);
+          const nodeLineStart = view.state.doc.lineAt(from);
+          const nodeLineEnd = view.state.doc.lineAt(to);
           const cursorInRange = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineEnd.to);
           if (!cursorInRange) return false;
           const totalCodeLines = nodeLineEnd.number - nodeLineStart.number - 1;
           const lineNumWidth = String(totalCodeLines).length;
           let codeLineIndex = 1;
           for (let i = nodeLineStart.number; i <= nodeLineEnd.number; i++) {
-            const line = view$1.state.doc.line(i);
+            const line = view.state.doc.line(i);
             const isFenceLine = i === nodeLineStart.number || i === nodeLineEnd.number;
             const relativeLineNum = codeLineIndex;
             decorations.push(mermaidMarkDecorations["mermaid-block"].range(line.from));
@@ -298,7 +292,7 @@ var MermaidPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
               decorations.push(mermaidMarkDecorations["mermaid-block-end"].range(line.from));
             if (!isFenceLine) {
               decorations.push(
-                view.Decoration.line({
+                Decoration.line({
                   attributes: {
                     "data-line-num": String(relativeLineNum),
                     style: `--line-num-width: ${lineNumWidth}ch`
@@ -347,7 +341,7 @@ var MermaidPlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
     return null;
   }
 };
-var theme = chunkPULMPDQL_cjs.createTheme({
+var theme = createTheme({
   default: {
     // Raw mermaid block lines (monospace)
     ".cm-draftly-mermaid-block:not(.cm-draftly-mermaid-block-rendered)": {
@@ -437,6 +431,6 @@ var theme = chunkPULMPDQL_cjs.createTheme({
   }
 });
 
-exports.MermaidPlugin = MermaidPlugin;
-//# sourceMappingURL=chunk-ZPG5FMPQ.cjs.map
-//# sourceMappingURL=chunk-ZPG5FMPQ.cjs.map
+export { MermaidPlugin };
+//# sourceMappingURL=chunk-IHYONIJH.js.map
+//# sourceMappingURL=chunk-IHYONIJH.js.map
