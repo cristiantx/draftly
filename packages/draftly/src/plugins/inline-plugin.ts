@@ -1,12 +1,11 @@
-import { Decoration, KeyBinding } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type KeyBinding } from "@codemirror/view";
+import { type DecorationContext, DecorationPlugin, type DescribedKeyBinding } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import type { SyntaxNode } from "@lezer/common";
 import { toggleMarkdownStyle } from "../editor/utils";
 import { tags } from "@lezer/highlight";
 import type { MarkdownConfig, InlineParser } from "@lezer/markdown";
-import { Extension } from "@codemirror/state";
+import type { Extension } from "@codemirror/state";
 import { createWrapSelectionInputHandler } from "../lib";
 
 /**
@@ -39,10 +38,9 @@ const inlineMarkDecorations = {
 const EQUALS = 61;
 
 // Punctuation regex for flanking checks (matches Unicode punctuation)
-// eslint-disable-next-line no-useless-escape
-let Punctuation = /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~\xA1\u2010-\u2027]/;
+let Punctuation = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\xA1\u2010-\u2027]/;
 try {
-  Punctuation = new RegExp("[\\p{S}|\\p{P}]", "u");
+  Punctuation = /[\p{S}|\p{P}]/u;
 } catch {
   // Fallback regex is used above for environments without Unicode support
 }
@@ -130,34 +128,46 @@ export class InlinePlugin extends DecorationPlugin {
   /**
    * Keyboard shortcuts for inline formatting
    */
-  override getKeymap(): KeyBinding[] {
+  override getKeymap(): DescribedKeyBinding[] {
     return [
       {
+        name: "Bold",
+        description: "Wrap the selection in ** **",
         key: "Mod-b",
         run: toggleMarkdownStyle("**"),
         preventDefault: true,
       },
       {
+        name: "Italic",
+        description: "Wrap the selection in * *",
         key: "Mod-i",
         run: toggleMarkdownStyle("*"),
         preventDefault: true,
       },
       {
+        name: "Strikethrough",
+        description: "Wrap the selection in ~~ ~~",
         key: "Mod-Shift-s",
         run: toggleMarkdownStyle("~~"),
         preventDefault: true,
       },
       {
+        name: "Subscript",
+        description: "Wrap the selection in ~ ~",
         key: "Mod-,",
         run: toggleMarkdownStyle("~"),
         preventDefault: true,
       },
       {
+        name: "Superscript",
+        description: "Wrap the selection in ^ ^",
         key: "Mod-.",
         run: toggleMarkdownStyle("^"),
         preventDefault: true,
       },
       {
+        name: "Highlight",
+        description: "Wrap the selection in == ==",
         key: "Mod-Shift-h",
         run: toggleMarkdownStyle("=="),
         preventDefault: true,
@@ -195,9 +205,9 @@ export class InlinePlugin extends DecorationPlugin {
    */
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 

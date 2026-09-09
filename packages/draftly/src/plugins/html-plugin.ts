@@ -1,8 +1,9 @@
 import { Decoration, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { type DecorationContext, DecorationPlugin } from "../editor/plugin";
 import DOMPurify from "dompurify";
 import { createTheme } from "../editor";
+import { escapeHtml } from "../lib/escape-html";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Mark decorations for HTML content
@@ -88,6 +89,59 @@ interface InlineHTMLElement {
 }
 
 /**
+ * Node names the markdown parser produces for raw HTML.
+ *
+ * Hoisted so `requiredNodes` and `renderToHTML` cannot drift apart. Confirmed against
+ * the tree rather than guessed: `HTMLTag` for inline tags, `HTMLBlock` for a block,
+ * `Comment` inline and `CommentBlock` at block level.
+ */
+const HTML_NODE_NAMES = ["HTMLBlock", "HTMLTag", "Comment", "CommentBlock"] as const;
+
+/**
+ * Sanitize a lone HTML tag for preview output, preserving its open/close role.
+ *
+ * `ctx.sanitize()` cannot be used directly here. DOMPurify parses a *fragment*, so it
+ * balances what it is given: `<b>` comes back as `<b></b>` and `</b>` comes back as the
+ * empty string. Feeding the parser's individual `HTMLTag` nodes through it would emit a
+ * doubled opener and swallow every closer.
+ *
+ * So the tag is sanitized inside a balanced probe and the verdict is read off the
+ * result. An allowed tag is re-emitted in its original role; a rejected one
+ * (`<script>`, `<iframe>`, …) becomes the empty string. Attributes come from
+ * DOMPurify's own filtering, so `onclick` and `javascript:` hrefs are dropped without
+ * this function maintaining an allowlist of its own.
+ *
+ * @param raw - The tag exactly as written in the document, e.g. `<b class="x">`
+ * @param sanitize - The preview context's sanitizer
+ * @returns The tag to emit, or `""` if the tag is not allowed
+ */
+function sanitizeHTMLTag(raw: string, sanitize: (html: string) => string): string {
+  const parsed = parseHTMLTag(raw);
+  if (!parsed) {
+    // Not a recognisable tag -- treat it as text rather than markup.
+    return escapeHtml(raw);
+  }
+
+  const { tagName, isClosing } = parsed;
+
+  if (isClosing) {
+    // A closing tag carries no attributes; the only question is whether the element
+    // is allowed at all. Probe with a balanced pair.
+    return sanitize(`<${tagName}></${tagName}>`) === "" ? "" : raw;
+  }
+
+  const cleaned = sanitize(raw).trim();
+  if (cleaned === "") {
+    return "";
+  }
+
+  // DOMPurify closed the element for us; drop the closer it added so the document's
+  // own closing tag stays the one that closes it.
+  const closer = `</${tagName}>`;
+  return cleaned.endsWith(closer) ? cleaned.slice(0, -closer.length) : cleaned;
+}
+
+/**
  * Parse an HTML tag to extract its name and type
  */
 function parseHTMLTag(content: string): { tagName: string; isClosing: boolean; isSelfClosing: boolean } | null {
@@ -112,6 +166,7 @@ export class HTMLPlugin extends DecorationPlugin {
   readonly name = "html";
   readonly version = "1.0.0";
   override decorationPriority = 30;
+  override readonly requiredNodes = HTML_NODE_NAMES;
 
   constructor() {
     super();
@@ -126,13 +181,13 @@ export class HTMLPlugin extends DecorationPlugin {
 
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
     // Collect blocks and inline tags
     const htmlGroups: HTMLGroup[] = [];
     const htmlTags: HTMLTagInfo[] = [];
 
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -301,6 +356,43 @@ export class HTMLPlugin extends DecorationPlugin {
       }
     }
   }
+
+  /**
+   * Render raw HTML nodes to preview HTML.
+   *
+   * Without this the nodes reached the renderer's leaf fallback and were emitted
+   * verbatim, so `<script>alert(1)</script>` written in a document became a live script
+   * tag in the output regardless of the `sanitize` setting. This is the parity fix for
+   * `HTMLPreviewWidget`, which has always sanitized on the editor surface.
+   *
+   * @param node - The syntax node to render
+   * @param _children - Unused; HTML nodes are leaves as far as the markdown tree is concerned
+   * @param ctx - Preview context, for `sliceDoc` and `sanitize`
+   * @returns HTML to emit, or `null` to decline
+   */
+  override renderToHTML(
+    node: SyntaxNode,
+    _children: string,
+    ctx: { sliceDoc(from: number, to: number): string; sanitize(html: string): string }
+  ): string | null {
+    switch (node.name) {
+      case "HTMLBlock":
+        // A block is a complete fragment, which is exactly what DOMPurify expects.
+        return ctx.sanitize(ctx.sliceDoc(node.from, node.to));
+
+      case "HTMLTag":
+        return sanitizeHTMLTag(ctx.sliceDoc(node.from, node.to), (html) => ctx.sanitize(html));
+
+      case "Comment":
+      case "CommentBlock":
+        // Comments render as nothing. Emitting them raw would be inert but would also
+        // leak document source into the output for no benefit.
+        return "";
+
+      default:
+        return null;
+    }
+  }
 }
 
 /**
@@ -309,15 +401,15 @@ export class HTMLPlugin extends DecorationPlugin {
 const theme = createTheme({
   default: {
     ".cm-draftly-html-tag": {
-      color: "#6a737d",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      color: "var(--draftly-color-muted)",
+      fontFamily: "var(--draftly-font-mono)",
       fontSize: "0.85em",
     },
 
     ".cm-draftly-html-comment": {
-      color: "#6a737d",
+      color: "var(--draftly-color-muted)",
       fontStyle: "italic",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      fontFamily: "var(--draftly-font-mono)",
       fontSize: "0.85em",
       opacity: 0.5,
     },

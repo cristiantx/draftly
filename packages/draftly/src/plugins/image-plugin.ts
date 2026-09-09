@@ -1,8 +1,10 @@
-import { Decoration, EditorView, KeyBinding, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type EditorView, type KeyBinding, WidgetType } from "@codemirror/view";
+import { type DecorationContext, DecorationPlugin, type DescribedKeyBinding } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import { safeUrl } from "../lib/safe-url";
+import { escapeHtml } from "../lib/escape-html";
+import { resolveWidgetRange } from "../lib/widget-position";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Mark decorations for image syntax elements
@@ -51,14 +53,16 @@ class ImageWidget extends WidgetType {
     super();
   }
 
+  /**
+   * Compares **content only**.
+   *
+   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
+   * shift on any edit earlier in the document, so including them made the answer
+   * permanently no -- every <img> below an edit was destroyed and re-created,
+   * causing flicker and, depending on cache headers, a re-fetch. The handlers resolve the range from the live DOM instead.
+   */
   override eq(other: ImageWidget): boolean {
-    return (
-      other.url === this.url &&
-      other.alt === this.alt &&
-      other.from === this.from &&
-      other.to === this.to &&
-      other.title === this.title
-    );
+    return other.url === this.url && other.alt === this.alt && other.title === this.title;
   }
 
   toDOM(view: EditorView) {
@@ -67,16 +71,17 @@ class ImageWidget extends WidgetType {
     figure.className = "cm-draftly-image-figure";
     figure.setAttribute("role", "figure");
     figure.style.cursor = "pointer";
-    if (this.title) {
-      figure.setAttribute("aria-label", this.title);
-    }
+    // Fall back to the alt text: a figure with no accessible name is announced as an
+    // unlabelled group, which is worse than repeating the image's own description.
+    figure.setAttribute("aria-label", this.title || this.alt || "Image");
 
     // Click handler to select the raw markdown text
     figure.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const range = resolveWidgetRange(view, figure, ["Image"]) ?? { from: this.from, to: this.to };
       view.dispatch({
-        selection: { anchor: this.from, head: this.to },
+        selection: { anchor: range.from, head: range.to },
         scrollIntoView: true,
       });
       view.focus();
@@ -85,7 +90,7 @@ class ImageWidget extends WidgetType {
     // Create image element with accessibility attributes
     const img = document.createElement("img");
     img.className = "cm-draftly-image";
-    img.src = this.url;
+    img.src = safeUrl(this.url, { allowDataImages: true });
     img.alt = this.alt;
     img.setAttribute("loading", "lazy");
     img.setAttribute("decoding", "async");
@@ -93,9 +98,13 @@ class ImageWidget extends WidgetType {
       img.title = this.title;
     }
 
-    // Handle image loading error
+    // Handle image loading error. `onerror` can fire more than once for the same element
+    // (re-decode, src reassignment), so appending unconditionally stacked duplicate
+    // messages inside the figure.
     img.onerror = () => {
       img.style.display = "none";
+      if (figure.querySelector(".cm-draftly-image-error")) return;
+
       const errorSpan = document.createElement("span");
       errorSpan.className = "cm-draftly-image-error";
       errorSpan.setAttribute("role", "alert");
@@ -151,9 +160,11 @@ export class ImagePlugin extends DecorationPlugin {
   /**
    * Keyboard shortcuts for image formatting
    */
-  override getKeymap(): KeyBinding[] {
+  override getKeymap(): DescribedKeyBinding[] {
     return [
       {
+        name: "Image",
+        description: "Turn the selection into an image reference, or unwrap one",
         key: "Mod-Shift-i",
         run: (view) => this.toggleImage(view),
         preventDefault: true,
@@ -197,7 +208,7 @@ export class ImagePlugin extends DecorationPlugin {
 
     // Find image pattern in line that contains the selection
     const imageRegex = /!\[([^\]]*)\]\(([^)]*)\)/g;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = imageRegex.exec(lineText)) !== null) {
       const matchFrom = lineStart + match.index;
       const matchTo = matchFrom + match[0].length;
@@ -244,9 +255,9 @@ export class ImagePlugin extends DecorationPlugin {
 
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -334,18 +345,22 @@ export class ImagePlugin extends DecorationPlugin {
     const parsed = parseImageMarkdown(content);
     if (!parsed) return null;
 
-    const altAttr = ctx.sanitize(parsed.alt);
-    const titleAttr = parsed.title ? ` title="${ctx.sanitize(parsed.title)}"` : "";
-    const ariaLabel = parsed.title ? ` aria-label="${ctx.sanitize(parsed.title)}"` : "";
+    // Escape, do not sanitize -- see the note in LinkPlugin.renderToHTML. `data:`
+    // image URLs are allowed here and only here; they are a real markdown idiom
+    // for an `<img src>` and meaningless for a navigation target.
+    const altAttr = escapeHtml(parsed.alt);
+    const srcAttr = escapeHtml(safeUrl(parsed.url, { allowDataImages: true }));
+    const titleAttr = parsed.title ? ` title="${escapeHtml(parsed.title)}"` : "";
+    const ariaLabel = parsed.title ? ` aria-label="${escapeHtml(parsed.title)}"` : "";
 
     let html = `<figure class="cm-draftly-image-figure" role="figure"${ariaLabel}>`;
-    html += `<img class="cm-draftly-image" src="${ctx.sanitize(parsed.url)}" alt="${altAttr}"${titleAttr} loading="lazy" decoding="async" />`;
+    html += `<img class="cm-draftly-image" src="${srcAttr}" alt="${altAttr}"${titleAttr} loading="lazy" decoding="async" />`;
 
     if (parsed.title) {
-      html += `<figcaption class="cm-draftly-image-caption">${ctx.sanitize(parsed.title)}</figcaption>`;
+      html += `<figcaption class="cm-draftly-image-caption">${escapeHtml(parsed.title)}</figcaption>`;
     }
 
-    html += `</figure>`;
+    html += "</figure>";
     return html;
   }
 }
@@ -361,19 +376,19 @@ const theme = createTheme({
 
     // Image markers (! [ ] ( ))
     ".cm-draftly-image-marker": {
-      color: "#6a737d",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      color: "var(--draftly-color-muted)",
+      fontFamily: "var(--draftly-font-mono)",
     },
 
     // Alt text
     ".cm-draftly-image-alt": {
-      color: "#22863a",
+      color: "var(--draftly-color-success)",
       fontStyle: "italic",
     },
 
     // URL
     ".cm-draftly-image-url": {
-      color: "#0366d6",
+      color: "var(--draftly-color-link)",
       textDecoration: "underline",
     },
 
@@ -404,7 +419,7 @@ const theme = createTheme({
       display: "block",
       width: "100%",
       fontSize: "0.875em",
-      color: "#6a737d",
+      color: "var(--draftly-color-muted)",
       marginTop: "0.5em",
       textAlign: "center",
       fontStyle: "italic",
@@ -414,34 +429,11 @@ const theme = createTheme({
     ".cm-draftly-image-error": {
       display: "inline-block",
       padding: "0.5em 1em",
-      backgroundColor: "rgba(255, 0, 0, 0.1)",
-      color: "#d73a49",
+      backgroundColor: "var(--draftly-color-error-surface)",
+      color: "var(--draftly-color-danger)",
       borderRadius: "4px",
       fontSize: "0.875em",
       fontStyle: "italic",
-    },
-  },
-
-  dark: {
-    ".cm-draftly-image-marker": {
-      color: "#8b949e",
-    },
-
-    ".cm-draftly-image-alt": {
-      color: "#7ee787",
-    },
-
-    ".cm-draftly-image-url": {
-      color: "#58a6ff",
-    },
-
-    ".cm-draftly-image-caption": {
-      color: "#8b949e",
-    },
-
-    ".cm-draftly-image-error": {
-      backgroundColor: "rgba(255, 0, 0, 0.15)",
-      color: "#f85149",
     },
   },
 });

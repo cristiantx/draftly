@@ -1,8 +1,7 @@
 import { Decoration } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { type DecorationContext, DecorationPlugin } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Line decoration for horizontal rule lines
@@ -46,9 +45,9 @@ export class HRPlugin extends DecorationPlugin {
    */
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -71,7 +70,6 @@ export class HRPlugin extends DecorationPlugin {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   override renderToHTML(node: SyntaxNode, _children: string): string | null {
     if (node.name !== "HorizontalRule") {
       return null;

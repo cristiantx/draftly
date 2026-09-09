@@ -1,5 +1,5 @@
-import { SyntaxNode } from "@lezer/common";
-import { ThemeEnum } from "../editor/utils";
+import type { SyntaxNode } from "@lezer/common";
+import type { ThemeEnum } from "../editor/utils";
 
 export type SyntaxThemeInput =
   | import("@codemirror/language").HighlightStyle
@@ -47,6 +47,23 @@ export interface PreviewConfig {
 
   /** Whether to sanitize HTML blocks (default: true) */
   sanitize?: boolean;
+
+  /**
+   * Sanitizer to use instead of the bundled DOMPurify.
+   *
+   * **Required for server-side rendering.** DOMPurify needs a DOM, so outside a browser
+   * the bundled sanitizer cannot run and `sanitize: true` protects nothing. Draftly does
+   * not depend on jsdom — it is heavy, and forcing it on every consumer to serve the
+   * server-rendering subset is the wrong trade — so supply your own here:
+   *
+   * ```ts
+   * import createDOMPurify from "isomorphic-dompurify";
+   * preview(md, { sanitizer: (html) => createDOMPurify.sanitize(html) });
+   * ```
+   *
+   * Ignored when `sanitize` is `false`.
+   */
+  sanitizer?: (html: string) => string;
 
   /** Theme to use */
   theme?: ThemeEnum;

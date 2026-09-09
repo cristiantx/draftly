@@ -1,8 +1,7 @@
 import { Decoration } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { type DecorationContext, DecorationPlugin } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Node types for ATX headings in markdown
@@ -76,9 +75,9 @@ export class HeadingPlugin extends DecorationPlugin {
    */
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -86,7 +85,7 @@ export class HeadingPlugin extends DecorationPlugin {
           return;
         }
 
-        const level = parseInt(name.slice(-1), 10);
+        const level = Number.parseInt(name.slice(-1), 10);
         const headingClass = `heading-${level}` as keyof typeof headingMarkDecorations;
         const lineClass = `heading-${level}` as keyof typeof headingLineDecorations;
 
@@ -123,7 +122,7 @@ export class HeadingPlugin extends DecorationPlugin {
       return null;
     }
 
-    const level = parseInt(node.name.slice(-1), 10);
+    const level = Number.parseInt(node.name.slice(-1), 10);
     const lineClass = headingLineDecorations[`heading-${level}` as keyof typeof headingLineDecorations].spec.class;
     const headingClass = headingMarkDecorations[`heading-${level}` as keyof typeof headingMarkDecorations].spec.class;
 

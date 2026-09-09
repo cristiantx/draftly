@@ -1,13 +1,14 @@
-import { Extension, Prec } from "@codemirror/state";
-import { EditorView, highlightActiveLine, KeyBinding, keymap } from "@codemirror/view";
+import { type Extension, Prec } from "@codemirror/state";
+import { EditorView, highlightActiveLine, type KeyBinding, keymap } from "@codemirror/view";
 import { markdown, markdownKeymap, markdownLanguage } from "@codemirror/lang-markdown";
 import type { MarkdownConfig } from "@lezer/markdown";
-import { DraftlyPlugin, PluginContext } from "./plugin";
+import type { DraftlyPlugin, PluginContext } from "./plugin";
 import { createDraftlyViewExtension } from "./view-plugin";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { indentOnInput } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { ThemeEnum } from "./utils";
+import { pluginThemeExtension } from "./theme-cache";
 import { markdownResetExtension } from "./theme";
 
 /**
@@ -65,6 +66,26 @@ export interface DraftlyConfig {
 
   /** Callback to receive the nodes on every update */
   onNodesChange?: (nodes: DraftlyNode[]) => void;
+
+  /**
+   * Called when a plugin's `buildDecorations` throws.
+   *
+   * Decoration errors are swallowed by design — Lezer exposes partially-built trees
+   * mid-parse and node access throws until the parse settles — but that also hides
+   * genuine plugin bugs behind exactly the same symptom: the decoration silently does
+   * not appear.
+   *
+   * Errors raised while the syntax tree is still parsing are treated as transient and
+   * never reported. Everything else reaches this callback, **once per distinct
+   * plugin-and-message**, so a persistent bug does not flood the console.
+   *
+   * Without a handler, Draftly logs to `console.error` outside production and stays
+   * silent in it.
+   *
+   * @param plugin - Name of the plugin that threw
+   * @param error - The thrown value
+   */
+  onPluginError?: (plugin: string, error: unknown) => void;
 }
 
 /**
@@ -102,6 +123,7 @@ export function draftly(config: DraftlyConfig = {}): Extension[] {
     highlightActiveLine: configHighlightActiveLine = true,
     lineWrapping: configLineWrapping = true,
     onNodesChange: configOnNodesChange = undefined,
+    onPluginError: configOnPluginError = undefined,
   } = config;
 
   const allPlugins = [...plugins];
@@ -132,10 +154,10 @@ export function draftly(config: DraftlyConfig = {}): Extension[] {
         pluginKeymaps.push(...keys);
       }
 
-      // Collect theme via class method
-      const theme = plugin.theme;
-      if (baseStyles && theme && typeof theme === "function") {
-        pluginExtensions.push(EditorView.theme(theme(configTheme)));
+      // Collect theme via class method. Memoized per (plugin, theme): a fresh
+      // EditorView.theme() here would re-inject every rule on each draftly() call.
+      if (baseStyles) {
+        pluginExtensions.push(pluginThemeExtension(plugin, configTheme));
       }
 
       // Collect markdown parser extensions via class method
@@ -172,7 +194,9 @@ export function draftly(config: DraftlyConfig = {}): Extension[] {
   // draftly extensions (pass plugins for decoration support)
   const draftlyExtensions: Extension[] = [];
   if (!disableViewPlugin) {
-    draftlyExtensions.push(createDraftlyViewExtension(configTheme, baseStyles, allPlugins, configOnNodesChange));
+    draftlyExtensions.push(
+      createDraftlyViewExtension(configTheme, baseStyles, allPlugins, configOnNodesChange, configOnPluginError)
+    );
     draftlyExtensions.push(Prec.highest(markdownResetExtension));
   }
   if (!disableViewPlugin || configLineWrapping) draftlyExtensions.push(EditorView.lineWrapping);

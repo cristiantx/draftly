@@ -11,26 +11,48 @@ import Footer from "./footer";
 import Header from "./header";
 import Devbar from "./devbar";
 import Sidebar from "./sidebar";
-import { Content } from "./types";
+import type { Content } from "./types";
 import CreateContentDialog from "./create-content-dialog";
 
 import whatIsDraftly from "../data/md/what-id-draftly";
 import walkthrough from "../data/md/walkthrough";
 
-import CodeMirror, { EditorView, Extension, ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import CodeMirror, { EditorView, type Extension, type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
-import { allPlugins } from "draftly/src";
-import { generateCSS, preview } from "draftly/src";
-import { draftly, DraftlyNode, DraftlyPlugin, ThemeEnum } from "draftly/src";
+import { createAllPlugins } from "draftly/src/plugins/all";
 
-// Plugin configuration - dynamic based on allPlugins
+// `MathPlugin` ships no CSS unless it is asked to (`injectStyles: true`), so a consumer
+// with a build step imports KaTeX's own stylesheet — fonts and all — and lets the bundler
+// handle it. This is that path; `injectStyles` exists for pages that have no build step.
+import "katex/dist/katex.min.css";
+import { generateCSS, preview } from "draftly/src";
+import { draftly, type DraftlyNode, type DraftlyPlugin, ThemeEnum } from "draftly/src";
+
+/**
+ * The playground's own plugin instances.
+ *
+ * Built once, at module scope, because the playground renders exactly one editor. A page
+ * with two editors would call `createAllPlugins()` once per editor instead — plugin
+ * instances hold per-view state, so sharing one set across editors makes them overwrite
+ * each other's configuration.
+ *
+ * The playground deliberately imports from `draftly/plugins/all`, which pulls mermaid and
+ * KaTeX. It is a demo of every feature, so it is the one consumer that genuinely wants
+ * all of them; a real app imports `draftly/plugins` and adds only what it needs.
+ *
+ * Exported so `devbar` can list the same instances rather than constructing a second set
+ * just to read their names.
+ */
+export const playgroundPlugins: DraftlyPlugin[] = createAllPlugins();
+
+// Plugin configuration - dynamic based on playgroundPlugins
 export type PluginConfig = Record<string, boolean>;
 
-// Build default plugin config from allPlugins (all enabled by default)
+// Build default plugin config from the plugin set (all enabled by default)
 const defaultPluginConfig: PluginConfig = Object.fromEntries(
-  allPlugins.map((plugin) => [plugin.name.toLowerCase(), true])
+  playgroundPlugins.map((plugin) => [plugin.name.toLowerCase(), true])
 );
 
 // Configuration for devbar controls
@@ -76,7 +98,7 @@ const DEBOUNCE_MS = 500;
 
 // Bump this version whenever default content (whatIsDraftly / walkthrough) changes.
 // The app will detect the mismatch and refresh the default entries in localStorage.
-const VERSION = 1;
+const VERSION = 3;
 
 const DEFAULT_CONTENTS: Content[] = [
   {
@@ -164,8 +186,8 @@ export default function Page() {
     }
 
     if (storedCurrent && !isOutdated) {
-      const parsedCurrent = parseInt(storedCurrent, 10);
-      if (!isNaN(parsedCurrent)) {
+      const parsedCurrent = Number.parseInt(storedCurrent, 10);
+      if (!Number.isNaN(parsedCurrent)) {
         setCurrentContent(parsedCurrent);
       }
     }
@@ -205,15 +227,20 @@ export default function Page() {
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: recompute only when the selected content's text changes, not on every `contents` identity change
   const counts = useMemo(() => {
-    if (currentContent === -1) return { words: 0, lines: 0, char: 0 };
-    const content = contents[currentContent];
-    const words = content!.content.split(" ").length;
-    const lines = content!.content.split("\n").length;
-    const char = content!.content.length;
-    return { words, lines, char };
+    const text = currentContent === -1 ? "" : (contents[currentContent]?.content ?? "");
+    if (text === "") return { words: 0, lines: 0, char: 0 };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Split on any whitespace run, not a single space: splitting on " " counted
+    // newline-separated words as one, counted consecutive spaces as empty words, and
+    // returned 1 for an empty document.
+    const trimmed = text.trim();
+    return {
+      words: trimmed === "" ? 0 : trimmed.split(/\s+/).length,
+      lines: text.split("\n").length,
+      char: text.length,
+    };
   }, [currentContent, contents[currentContent]?.content]);
 
   function handleContentChange(id: string, content: string) {
@@ -294,7 +321,7 @@ export default function Page() {
 
   // Build active plugins list based on config
   const activePlugins = useMemo<DraftlyPlugin[]>(() => {
-    return allPlugins.filter((plugin) => {
+    return playgroundPlugins.filter((plugin) => {
       const name = plugin.name.toLowerCase() as keyof PluginConfig;
       return config.plugins[name] ?? true;
     });
@@ -324,7 +351,13 @@ export default function Page() {
   );
 
   useEffect(() => {
-    (async function () {
+    // Overlapping renders: `contents` and `activePlugins` both change often, and without
+    // a guard whichever render *finishes* last wins rather than whichever *started* last
+    // -- so the pane could settle on output for a superseded document. The flag also
+    // prevents a setState after unmount.
+    let cancelled = false;
+
+    (async () => {
       if (currentContent === -1 || !["view", "output"].includes(mode)) return;
       const start = performance.now();
 
@@ -348,9 +381,17 @@ export default function Page() {
         syntaxTheme: cmTheme,
       });
 
+      if (cancelled) return;
+
+      // Both inside the guard, so the reported time always belongs to the output on
+      // screen rather than to a run that was superseded.
       setOutputTime(performance.now() - start);
       setOutput({ html, css });
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentContent, contents, theme, mode, activePlugins, config.preview, cmTheme]);
 
   if (isLoading) {
@@ -411,9 +452,12 @@ export default function Page() {
 
         {/* Editor */}
         <div
-          className={cn("flex-1 h-full mx-2 border rounded-lg overflow-hidden flex items-center justify-center dark:bg-[#0d1117]", {
-            "ml-0 max-xl:ml-2": sidebarOpen,
-          })}
+          className={cn(
+            "flex-1 h-full mx-2 border rounded-lg overflow-hidden flex items-center justify-center dark:bg-[#0d1117]",
+            {
+              "ml-0 max-xl:ml-2": sidebarOpen,
+            }
+          )}
         >
           {currentContent !== -1 ? (
             mode === "view" ? (
@@ -505,7 +549,13 @@ export default function Page() {
             }
           )}
         >
-          <Devbar nodes={nodes} setShowNodes={setShowNodes} config={config} setConfig={setConfig} outputTime={outputTime} />
+          <Devbar
+            nodes={nodes}
+            setShowNodes={setShowNodes}
+            config={config}
+            setConfig={setConfig}
+            outputTime={outputTime}
+          />
         </div>
       </main>
 

@@ -97,7 +97,8 @@ Here's a complete example using `@uiw/react-codemirror`:
 
 ```tsx
 import CodeMirror from "@uiw/react-codemirror";
-import { draftly, allPlugins, ThemeEnum } from "draftly";
+import { draftly, ThemeEnum } from "draftly";
+import { createAllPlugins } from "draftly/plugins/all";
 import { githubDark } from "@uiw/codemirror-theme-github";
 
 function MarkdownEditor() {
@@ -109,7 +110,7 @@ function MarkdownEditor() {
         draftly({
           theme: ThemeEnum.DARK,
           themeStyle: githubDark,
-          plugins: allPlugins,
+          plugins: createAllPlugins(),
           lineWrapping: true,
           history: true,
           indentWithTab: true,
@@ -147,7 +148,10 @@ function MarkdownEditor() {
 Render markdown to semantic HTML for server-side rendering, static site generation, or read-only views.
 
 ```tsx
-import { preview, generateCSS, allPlugins, ThemeEnum } from "draftly";
+import { preview, generateCSS, ThemeEnum } from "draftly";
+import { createAllPlugins } from "draftly/plugins/all";
+
+const plugins = createAllPlugins();
 
 const markdown = `
 # Hello World
@@ -162,7 +166,7 @@ This is a **bold** statement with some \`inline code\`.
 // Generate HTML
 const html = preview(markdown, {
   theme: ThemeEnum.LIGHT,
-  plugins: allPlugins,
+  plugins,
   sanitize: true,
   wrapperClass: "prose",
 });
@@ -170,7 +174,7 @@ const html = preview(markdown, {
 // Generate matching CSS
 const css = generateCSS({
   theme: ThemeEnum.LIGHT,
-  plugins: allPlugins,
+  plugins,
   wrapperClass: "prose",
   includeBase: true,
 });
@@ -192,10 +196,31 @@ function ArticlePreview() {
 | -------------- | ------------------ | ------------------- | ------------------------------------- |
 | `plugins`      | `DraftlyPlugin[]`  | `[]`                | Plugins for rendering.                |
 | `theme`        | `ThemeEnum`        | `ThemeEnum.AUTO`    | Theme mode.                           |
-| `sanitize`     | `boolean`          | `true`              | Sanitize HTML output (via DOMPurify). |
+| `sanitize`     | `boolean`          | `true`              | Sanitize HTML output. **Browser only** — see below. |
+| `sanitizer`    | `(html) => string` | `undefined`         | Sanitizer to use instead of the bundled DOMPurify. Required for SSR. |
 | `wrapperClass` | `string`           | `"draftly-preview"` | CSS class for the wrapper element.    |
 | `wrapperTag`   | `string`           | `"article"`         | HTML tag for the wrapper element.     |
 | `markdown`     | `MarkdownConfig[]` | `[]`                | Additional parser extensions.         |
+
+> [!WARNING]
+> **`sanitize: true` does nothing outside a browser.** It is implemented with DOMPurify,
+> which needs a DOM, so during SSR or static generation the option is a no-op and any HTML
+> in the markdown is emitted **unsanitized**. Draftly warns on the console when this
+> happens, but if you render untrusted markdown on a server you must pass your own
+> sanitizer:
+>
+> ```ts
+> import DOMPurify from "isomorphic-dompurify";
+>
+> preview(markdown, {
+>   plugins,
+>   sanitizer: (html) => DOMPurify.sanitize(html),
+> });
+> ```
+>
+> Draftly does not bundle `jsdom` — it is heavy, and every browser consumer would pay for
+> it. Sanitizing at the application layer works equally well.
+
 
 ---
 
@@ -291,8 +316,8 @@ Draftly provides seamless theming with automatic light/dark mode support:
 Import only what you need to minimize bundle size:
 
 ```typescript
-// Full package
-import { draftly, preview, allPlugins } from "draftly";
+// Core package — the editor, the preview renderer, and the light plugins
+import { draftly, preview } from "draftly";
 
 // Editor only
 import { draftly, DraftlyPlugin } from "draftly/editor";
@@ -302,6 +327,65 @@ import { preview, generateCSS } from "draftly/preview";
 
 // Individual plugins
 import { HeadingPlugin, ListPlugin } from "draftly/plugins";
+```
+
+#### The heavy plugins are opt-in
+
+Three plugins carry large third-party dependencies and live behind their own entry points,
+so that nothing importing `draftly/plugins` pays for them:
+
+| Entry point               | Plugin          | Dependency   | Approx. bundled cost |
+| ------------------------- | --------------- | ------------ | -------------------- |
+| `draftly/plugins/mermaid` | `MermaidPlugin` | `mermaid`    | 5.3 MB               |
+| `draftly/plugins/math`    | `MathPlugin`    | `katex` (peer) | 0 — you install it   |
+| `draftly/plugins/emoji`   | `EmojiPlugin`   | `node-emoji` | 312 KB               |
+
+Compose the set you actually want:
+
+```typescript
+import { draftly } from "draftly";
+import { createEssentialPlugins } from "draftly/plugins";
+import { MathPlugin } from "draftly/plugins/math";
+
+const extensions = draftly({
+  plugins: [...createEssentialPlugins(), new MathPlugin()],
+});
+```
+
+##### KaTeX is a peer dependency, and its CSS is yours to bring
+
+`katex` is a **peer dependency**, marked optional — install it yourself if you use
+`MathPlugin`, and skip it otherwise. It is not bundled into `dist/`, so you get exactly one
+copy of it.
+
+Rendered math is unstyled without KaTeX's stylesheet, and Draftly does not inject it by
+default. If you have a build step, import it — this is the cheap path, and your bundler
+handles the fonts:
+
+```typescript
+import "katex/dist/katex.min.css";
+```
+
+If you have no build step — a `<script>` tag, a CDN, an embedded editor — let the plugin
+inject the stylesheet instead:
+
+```typescript
+new MathPlugin({ injectStyles: true });
+```
+
+That injects KaTeX's CSS with all 20 font faces inlined as `data:` URIs, once per document,
+and costs about 360 KB. The fonts are inlined rather than referenced because KaTeX's own
+`@font-face` rules use relative `fonts/KaTeX_*` paths, which a `<style>` element resolves
+against your page URL rather than the package — so they 404 unless you happen to serve them
+from there. The stylesheet sits behind a dynamic `import()` and ships as its own chunk, so
+leaving `injectStyles` at its default of `false` costs nothing.
+
+Or take everything from `draftly/plugins/all`, which pulls all three by design:
+
+```typescript
+import { createAllPlugins } from "draftly/plugins/all";
+
+const extensions = draftly({ plugins: createAllPlugins() });
 ```
 
 ---
@@ -318,7 +402,38 @@ import { HeadingPlugin, ListPlugin } from "draftly/plugins";
 | `DraftlyNode`   | `draftly/editor`  | Type for AST nodes.                             |
 | `preview`       | `draftly/preview` | Function to render markdown to HTML.            |
 | `generateCSS`   | `draftly/preview` | Function to generate CSS for preview styling.   |
-| `allPlugins`    | `draftly/plugins` | Array of all built-in plugins.                  |
+| `createEssentialPlugins()` | `draftly/plugins` | Builds a fresh set of the essential plugins. Call once per editor. |
+| `createAllPlugins()`       | `draftly/plugins/all` | Builds a fresh set of every built-in plugin, heavy ones included. Call once per editor. |
+| `MermaidPlugin`            | `draftly/plugins/mermaid` | Mermaid diagrams. Opt-in — pulls `mermaid`. |
+| `MathPlugin`               | `draftly/plugins/math` | LaTeX via KaTeX. Opt-in — `katex` is an optional peer dependency. |
+| `EmojiPlugin`              | `draftly/plugins/emoji` | `:shortcode:` emoji. Opt-in — pulls `node-emoji`. |
+
+---
+
+## Keyboard Shortcuts
+
+Contributed by the built-in plugins. `Mod` is `Cmd` on macOS and `Ctrl` elsewhere.
+
+| Shortcut                                | Action                                           |
+| --------------------------------------- | ------------------------------------------------ |
+| `Mod-B` / `Mod-I` / `Mod-Shift-S`       | Bold / italic / strikethrough                    |
+| `Mod-,` / `Mod-.`                       | Subscript / superscript                          |
+| `Mod-Shift-H`                           | Highlight                                        |
+| `Mod-E` / `Mod-Shift-E`                 | Inline code / fenced code block                  |
+| `Mod-K`                                 | Link                                             |
+| `Mod-Shift-I`                           | Image                                            |
+| `Mod-Shift-8` / `Mod-Shift-7`           | Bullet list / ordered list                       |
+| `Mod-Shift-9`                           | Task list                                        |
+| `Mod-Enter`                             | Toggle the task(s) on the selected lines         |
+| `Mod-Shift-T`                           | Insert table                                     |
+| `Mod-Alt-Down` / `Mod-Alt-Right`        | Add table row / column                           |
+| `Mod-Alt-Backspace` / `Mod-Alt-Delete`  | Remove table row / column                        |
+| `Tab` / `Shift-Tab` (in a table)        | Next / previous cell                             |
+| `Shift-Enter` (in a table)              | Insert a line break inside a cell                |
+
+`Mod-Enter` is the only way to toggle a task without a mouse: the rendered checkbox is
+deliberately not focusable, because focusable children inside a `contenteditable` surface
+interfere with the editor's own focus and selection handling.
 
 ---
 
@@ -332,6 +447,13 @@ Draftly supports all modern browsers:
 | Firefox | 78+     |
 | Safari  | 14+     |
 | Edge    | 88+     |
+
+Table column alignment in the **raw markdown** uses `Intl.Segmenter` (Chrome 87+,
+Safari 14.1+, Firefox 125+) to group grapheme clusters. Where it is unavailable Draftly
+falls back to per-code-point measurement, which still handles CJK, emoji and combining
+marks and only slightly over-estimates emoji built from ZWJ sequences. The support floor
+above is unchanged, and the rendered table view is unaffected either way — it is laid out
+with CSS, not with padding.
 
 ---
 

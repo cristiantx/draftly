@@ -1,13 +1,19 @@
-import { Annotation, EditorState, Extension, Prec, Range, RangeSet } from "@codemirror/state";
+import { Annotation, type EditorState, type Extension, Prec, type Range, RangeSet } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
-import { BlockWrapper, Decoration, EditorView, KeyBinding, WidgetType, keymap } from "@codemirror/view";
-import { SyntaxNode } from "@lezer/common";
-import { MarkdownConfig, Table } from "@lezer/markdown";
+import { BlockWrapper, Decoration, EditorView, type KeyBinding, WidgetType, keymap } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
+import { type MarkdownConfig, Table } from "@lezer/markdown";
 import { createTheme } from "../editor";
-import { DraftlyConfig } from "../editor/draftly";
-import { DecorationContext, DecorationPlugin, PluginContext } from "../editor/plugin";
+import type { DraftlyConfig } from "../editor/draftly";
+import {
+  type DecorationContext,
+  DecorationPlugin,
+  type DescribedKeyBinding,
+  type PluginContext,
+} from "../editor/plugin";
 import { ThemeEnum } from "../editor/utils";
 import { PreviewRenderer } from "../preview/renderer";
+import { displayWidth } from "../lib/display-width";
 
 type Alignment = "left" | "center" | "right";
 type TableRowKind = "header" | "body";
@@ -280,9 +286,16 @@ function normalizeCellContent(text: string): string {
   return parts.join(` ${BREAK_TAG} `).trim();
 }
 
-/** Measures the visible width of a cell for markdown alignment output. */
+/**
+ * Measures the visible width of a cell for markdown alignment output.
+ *
+ * Measured in monospace **columns**, not code units. `String.length` misaligns the raw
+ * markdown for CJK (two columns, one unit), emoji (two columns, two units), combining
+ * marks (zero columns, one unit) and ZWJ sequences. Pure ASCII is unaffected, so existing
+ * documents see no padding churn.
+ */
 function renderWidth(text: string): number {
-  return canonicalizeBreakTags(text).replace(BREAK_TAG, " ").replace(/\\\|/g, "|").length;
+  return displayWidth(canonicalizeBreakTags(text).replace(BREAK_TAG, " ").replace(/\\\|/g, "|"));
 }
 
 /** Pads a cell according to its alignment for normalized markdown output. */
@@ -738,9 +751,26 @@ export class TablePlugin extends DecorationPlugin {
   override readonly requiredNodes = ["Table", "TableHeader", "TableDelimiter", "TableRow", "TableCell"] as const;
 
   private draftlyConfig: DraftlyConfig | undefined;
+
+  // Re-entrancy locks, not caches -- see artifacts/architecture/plugin-table.md. Each
+  // holds the view a deferred repair is queued for, and each queued microtask bails if
+  // the field no longer names its view. Removing them causes infinite dispatch loops.
+  //
+  // They are also the library's most concrete leak: a view destroyed while its microtask
+  // is queued would be retained here for the lifetime of the page, since this plugin is
+  // a module-level singleton. onViewDestroy is what closes that.
   private pendingNormalizationView: EditorView | null = null;
   private pendingPaddingView: EditorView | null = null;
   private pendingSelectionRepairView: EditorView | null = null;
+
+  /**
+   * Set of views CodeMirror has torn down.
+   *
+   * `EditorView` exposes no public "destroyed" flag, so a queued microtask cannot ask the
+   * view whether it is still alive. Weak, so an entry disappears with the view rather
+   * than becoming its own leak.
+   */
+  private readonly destroyedViews = new WeakSet<EditorView>();
 
   /** Stores the editor config for preview rendering and shared behavior. */
   override onRegister(context: PluginContext): void {
@@ -770,29 +800,141 @@ export class TablePlugin extends DecorationPlugin {
     ];
   }
 
-  /** Provides the table-specific keyboard shortcuts and navigation. */
-  override getKeymap(): KeyBinding[] {
+  /**
+   * Nothing to register here: the table's bindings rebind keys the editor already
+   * uses, so they go in at `Prec.highest()` via {@link buildTableKeymap} and each
+   * one declines unless the cursor is actually in a table.
+   */
+  override getKeymap(): DescribedKeyBinding[] {
     return [];
   }
 
+  /**
+   * Documented separately from {@link getKeymap} because these bindings are
+   * registered through the precedence-wrapped extension rather than the plugin
+   * keymap, and a user still needs to be able to discover them.
+   *
+   * @returns The table shortcuts, all scoped to being inside a table
+   */
+  override getShortcuts(): DescribedKeyBinding[] {
+    return this.buildTableKeymap();
+  }
+
   /** Builds the high-priority key bindings used inside tables. */
-  private buildTableKeymap(): KeyBinding[] {
+  private buildTableKeymap(): DescribedKeyBinding[] {
+    const context = "Inside a table";
+
     return [
-      { key: "Mod-Shift-t", run: (view) => this.insertTable(view), preventDefault: true },
-      { key: "Mod-Alt-ArrowDown", run: (view) => this.addRow(view), preventDefault: true },
-      { key: "Mod-Alt-ArrowRight", run: (view) => this.addColumn(view), preventDefault: true },
-      { key: "Mod-Alt-Backspace", run: (view) => this.removeRow(view), preventDefault: true },
-      { key: "Mod-Alt-Delete", run: (view) => this.removeColumn(view), preventDefault: true },
-      { key: "Tab", run: (view) => this.handleTab(view, false) },
-      { key: "Shift-Tab", run: (view) => this.handleTab(view, true) },
-      { key: "ArrowLeft", run: (view) => this.handleArrowHorizontal(view, false) },
-      { key: "ArrowRight", run: (view) => this.handleArrowHorizontal(view, true) },
-      { key: "ArrowUp", run: (view) => this.handleArrowVertical(view, false) },
-      { key: "ArrowDown", run: (view) => this.handleArrowVertical(view, true) },
-      { key: "Enter", run: (view) => this.handleEnter(view) },
-      { key: "Shift-Enter", run: (view) => this.insertBreakTag(view), preventDefault: true },
-      { key: "Backspace", run: (view) => this.handleBreakDeletion(view, false) },
-      { key: "Delete", run: (view) => this.handleBreakDeletion(view, true) },
+      {
+        name: "Insert table",
+        description: "Insert a new markdown table at the cursor",
+        key: "Mod-Shift-t",
+        run: (view) => this.insertTable(view),
+        preventDefault: true,
+      },
+      {
+        name: "Add row",
+        description: "Append a row below the current one",
+        context,
+        key: "Mod-Alt-ArrowDown",
+        run: (view) => this.addRow(view),
+        preventDefault: true,
+      },
+      {
+        name: "Add column",
+        description: "Append a column to the right of the current one",
+        context,
+        key: "Mod-Alt-ArrowRight",
+        run: (view) => this.addColumn(view),
+        preventDefault: true,
+      },
+      {
+        name: "Delete row",
+        description: "Remove the row containing the cursor",
+        context,
+        key: "Mod-Alt-Backspace",
+        run: (view) => this.removeRow(view),
+        preventDefault: true,
+      },
+      {
+        name: "Delete column",
+        description: "Remove the column containing the cursor",
+        context,
+        key: "Mod-Alt-Delete",
+        run: (view) => this.removeColumn(view),
+        preventDefault: true,
+      },
+      {
+        name: "Next cell",
+        description: "Move to the next cell, wrapping to the following row",
+        context,
+        key: "Tab",
+        run: (view) => this.handleTab(view, false),
+      },
+      {
+        name: "Previous cell",
+        description: "Move to the previous cell, wrapping to the preceding row",
+        context,
+        key: "Shift-Tab",
+        run: (view) => this.handleTab(view, true),
+      },
+      {
+        name: "Cell left",
+        description: "Move to the cell on the left once the cursor reaches the cell edge",
+        context,
+        key: "ArrowLeft",
+        run: (view) => this.handleArrowHorizontal(view, false),
+      },
+      {
+        name: "Cell right",
+        description: "Move to the cell on the right once the cursor reaches the cell edge",
+        context,
+        key: "ArrowRight",
+        run: (view) => this.handleArrowHorizontal(view, true),
+      },
+      {
+        name: "Cell above",
+        description: "Move to the cell in the row above, keeping the column",
+        context,
+        key: "ArrowUp",
+        run: (view) => this.handleArrowVertical(view, false),
+      },
+      {
+        name: "Cell below",
+        description: "Move to the cell in the row below, keeping the column",
+        context,
+        key: "ArrowDown",
+        run: (view) => this.handleArrowVertical(view, true),
+      },
+      {
+        name: "New row",
+        description: "Add a row below and move into it",
+        context,
+        key: "Enter",
+        run: (view) => this.handleEnter(view),
+      },
+      {
+        name: "Line break in cell",
+        description: "Insert a line break inside the current cell",
+        context,
+        key: "Shift-Enter",
+        run: (view) => this.insertBreakTag(view),
+        preventDefault: true,
+      },
+      {
+        name: "Delete backwards",
+        description: "Remove the line break before the cursor as a unit",
+        context,
+        key: "Backspace",
+        run: (view) => this.handleBreakDeletion(view, false),
+      },
+      {
+        name: "Delete forwards",
+        description: "Remove the line break after the cursor as a unit",
+        context,
+        key: "Delete",
+        run: (view) => this.handleBreakDeletion(view, true),
+      },
     ];
   }
 
@@ -802,6 +944,21 @@ export class TablePlugin extends DecorationPlugin {
   }
 
   /** Re-schedules normalization after user-driven document changes. */
+  /**
+   * Releases everything scoped to a destroyed view.
+   *
+   * Clearing the pending fields drops the strong reference; recording the view as
+   * destroyed makes any microtask that is already queued bail rather than dispatching
+   * into a dead editor.
+   */
+  override onViewDestroy(view: EditorView): void {
+    this.destroyedViews.add(view);
+
+    if (this.pendingNormalizationView === view) this.pendingNormalizationView = null;
+    if (this.pendingPaddingView === view) this.pendingPaddingView = null;
+    if (this.pendingSelectionRepairView === view) this.pendingSelectionRepairView = null;
+  }
+
   override onViewUpdate(update: import("@codemirror/view").ViewUpdate): void {
     if (update.docChanged && !update.transactions.some((transaction) => transaction.annotation(normalizeAnnotation))) {
       this.schedulePadding(update.view);
@@ -851,11 +1008,20 @@ export class TablePlugin extends DecorationPlugin {
     return handled;
   }
 
-  /** Builds the visual table decorations for every parsed table block. */
+  /**
+   * Builds the visual table decorations for every parsed table block in the viewport.
+   *
+   * Scoped to `ctx.iterateVisible`, unlike `computeBlockWrappers` and
+   * `computeAtomicRanges` below, which stay document-wide deliberately — they feed
+   * CodeMirror facets rather than the decoration set, and a wrapper or atomic range that
+   * disappears when a table scrolls out of view would break layout and cursor motion.
+   * A `Table` node straddling the viewport edge is still entered in full, so a partly
+   * visible table decorates correctly.
+   */
   override buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
 
-    syntaxTree(view.state).iterate({
+    ctx.iterateVisible({
       enter: (node) => {
         if (node.name !== "Table") {
           return;
@@ -1130,6 +1296,13 @@ export class TablePlugin extends DecorationPlugin {
       }
 
       this.pendingNormalizationView = null;
+
+      // The view may have been torn down between scheduling and now; dispatching into
+      // a destroyed editor throws.
+      if (this.destroyedViews.has(view)) {
+        return;
+      }
+
       this.normalizeTables(view);
     });
   }
@@ -1192,6 +1365,13 @@ export class TablePlugin extends DecorationPlugin {
       }
 
       this.pendingPaddingView = null;
+
+      // The view may have been torn down between scheduling and now; dispatching into
+      // a destroyed editor throws.
+      if (this.destroyedViews.has(view)) {
+        return;
+      }
+
       this.ensureTablePadding(view);
     });
   }
@@ -1238,6 +1418,13 @@ export class TablePlugin extends DecorationPlugin {
       }
 
       this.pendingSelectionRepairView = null;
+
+      // The view may have been torn down between scheduling and now; dispatching into
+      // a destroyed editor throws.
+      if (this.destroyedViews.has(view)) {
+        return;
+      }
+
       this.ensureTableSelection(view);
     });
   }
@@ -1598,9 +1785,9 @@ const theme = createTheme({
       borderSpacing: "0",
       position: "relative",
       overflow: "visible",
-      border: "1px solid var(--color-border, #d7dee7)",
+      border: "1px solid var(--draftly-color-border)",
       borderRadius: "0.75rem",
-      backgroundColor: "var(--color-background, #ffffff)",
+      backgroundColor: "var(--draftly-color-surface)",
 
       "& .cm-draftly-table": {
         width: "100%",
@@ -1614,11 +1801,11 @@ const theme = createTheme({
       },
 
       "& .cm-draftly-table-header-row": {
-        backgroundColor: "rgba(15, 23, 42, 0.04)",
+        backgroundColor: "var(--draftly-surface-header)",
       },
 
       "& .cm-draftly-table-row-even": {
-        backgroundColor: "rgba(15, 23, 42, 0.02)",
+        backgroundColor: "var(--draftly-surface-stripe)",
       },
 
       "& .cm-draftly-table-delimiter-row": {
@@ -1632,8 +1819,8 @@ const theme = createTheme({
         height: "2.75rem",
         padding: "0.5rem 0.875rem",
         verticalAlign: "top",
-        borderRight: "1px solid var(--color-border, #d7dee7)",
-        borderBottom: "1px solid var(--color-border, #d7dee7)",
+        borderRight: "1px solid var(--draftly-color-border)",
+        borderBottom: "1px solid var(--draftly-color-border)",
         whiteSpace: "normal",
         overflowWrap: "break-word",
         wordBreak: "normal",
@@ -1684,11 +1871,11 @@ const theme = createTheme({
         position: "absolute",
         width: "1.75rem",
         height: "1.75rem",
-        border: "1px solid var(--color-border, #d7dee7)",
+        border: "1px solid var(--draftly-color-border)",
         borderRadius: "999px",
-        backgroundColor: "var(--color-background, #ffffff)",
-        color: "var(--color-text, #0f172a)",
-        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.12)",
+        backgroundColor: "var(--draftly-color-surface-raised)",
+        color: "var(--draftly-color-text)",
+        boxShadow: "var(--draftly-shadow-popover)",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1698,7 +1885,7 @@ const theme = createTheme({
       },
 
       "& .cm-draftly-table-control:hover": {
-        backgroundColor: "rgba(15, 23, 42, 0.05)",
+        backgroundColor: "var(--draftly-surface-hover)",
       },
 
       "& .cm-draftly-table-control-column": {
@@ -1723,36 +1910,6 @@ const theme = createTheme({
 
       "&:hover .cm-draftly-table-control-row, &:focus-within .cm-draftly-table-control-row": {
         transform: "translate(-50%, 0)",
-      },
-    },
-  },
-
-  dark: {
-    ".cm-draftly-table-wrapper, .cm-draftly-table-widget": {
-      borderColor: "var(--color-border, #30363d)",
-      backgroundColor: "var(--color-background, #0d1117)",
-
-      "& .cm-draftly-table-header-row": {
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-      },
-
-      "& .cm-draftly-table-row-even": {
-        backgroundColor: "rgba(255, 255, 255, 0.025)",
-      },
-
-      "& .cm-draftly-table-cell": {
-        borderColor: "var(--color-border, #30363d)",
-      },
-
-      "& .cm-draftly-table-control": {
-        borderColor: "var(--color-border, #30363d)",
-        backgroundColor: "var(--color-background, #161b22)",
-        color: "var(--color-text, #e6edf3)",
-        boxShadow: "0 12px 28px rgba(0, 0, 0, 0.35)",
-      },
-
-      "& .cm-draftly-table-control:hover": {
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
       },
     },
   },

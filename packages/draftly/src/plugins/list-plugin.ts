@@ -1,9 +1,9 @@
-import { Decoration, EditorView, KeyBinding, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type EditorView, type KeyBinding, WidgetType } from "@codemirror/view";
+import type { syntaxTree } from "@codemirror/language";
+import { type DecorationContext, DecorationPlugin, type DescribedKeyBinding } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { Range } from "@codemirror/state";
-import { SyntaxNode } from "@lezer/common";
+import type { Range } from "@codemirror/state";
+import type { SyntaxNode } from "@lezer/common";
 
 // ============================================================================
 // CSS Classes
@@ -26,7 +26,13 @@ const classes = {
   content: "cm-draftly-list-content",
   indent: "cm-draftly-list-indent",
   active: " cm-draftly-active",
-  preview: "cm-draftly-preview",
+
+  // Preview classes. Deliberately distinct from the `line*` classes above: those
+  // describe an editor *line*, and their flex layout and `!important` padding are
+  // meaningless -- and actively wrong -- on a real <ul>.
+  previewList: "cm-draftly-list",
+  previewUL: "cm-draftly-list-ul",
+  previewOL: "cm-draftly-list-ol",
 };
 
 // ============================================================================
@@ -49,12 +55,21 @@ export class TaskCheckboxWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement("span");
     wrap.className = `cm-draftly-task-checkbox ${this.checked ? "checked" : ""}`;
-    wrap.setAttribute("aria-hidden", "true");
+
+    // Announced as an image, not a checkbox. The widget replaces the raw `[ ]` marker, so
+    // without a label the state is invisible to assistive technology -- but it is not a
+    // real control either: making it focusable inside `contenteditable` fights the
+    // editor's own focus and selection handling. `role="img"` describes the state
+    // honestly without promising an interaction that is not there. The interaction lives
+    // on Mod-Enter instead, which works regardless of focus semantics.
+    wrap.setAttribute("role", "img");
+    wrap.setAttribute("aria-label", this.checked ? "Task complete" : "Task incomplete");
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = this.checked;
     checkbox.tabIndex = -1;
+    checkbox.setAttribute("aria-hidden", "true");
 
     checkbox.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -117,24 +132,76 @@ export class ListPlugin extends DecorationPlugin {
   /**
    * Keyboard shortcuts for list formatting
    */
-  override getKeymap(): KeyBinding[] {
+  override getKeymap(): DescribedKeyBinding[] {
     return [
       {
+        name: "Bullet list",
+        description: "Toggle the selected lines as a bullet list",
         key: "Mod-Shift-8",
         run: (view) => this.toggleListOnLines(view, "- "),
         preventDefault: true,
       },
       {
+        name: "Numbered list",
+        description: "Toggle the selected lines as a numbered list",
         key: "Mod-Shift-7",
         run: (view) => this.toggleListOnLines(view, "1. "),
         preventDefault: true,
       },
       {
+        name: "Task list",
+        description: "Toggle the selected lines as a task list",
         key: "Mod-Shift-9",
         run: (view) => this.toggleListOnLines(view, "- [ ] "),
         preventDefault: true,
       },
+      {
+        // The only way to toggle a task without a mouse. The rendered checkbox is not
+        // focusable -- see TaskCheckboxWidget.toDOM for why -- so this is not a
+        // convenience shortcut, it is the keyboard interface.
+        name: "Toggle task",
+        description: "Check or uncheck the task on the current line",
+        key: "Mod-Enter",
+        run: (view) => this.toggleTaskOnLines(view),
+        preventDefault: true,
+      },
     ];
+  }
+
+  /**
+   * Toggle the checked state of every task on the selected lines.
+   *
+   * Mirrors what clicking the checkbox does, for every line the selection touches.
+   * Mixed selections are normalised to checked, matching how checkbox groups behave
+   * elsewhere: if anything is unchecked, check everything; otherwise uncheck everything.
+   *
+   * @param view - The editor view
+   * @returns `true` if any task was toggled, so the keymap can fall through otherwise
+   */
+  private toggleTaskOnLines(view: EditorView): boolean {
+    const { state } = view;
+    const { from, to } = state.selection.main;
+    const startLine = state.doc.lineAt(from);
+    const endLine = state.doc.lineAt(to);
+
+    const marks: { pos: number; checked: boolean }[] = [];
+    for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+      const line = state.doc.line(lineNum);
+      const match = line.text.match(/^(\s*(?:[-*+]|\d+\.)\s*)\[([ xX])\]/);
+      if (match) {
+        marks.push({ pos: line.from + match[1]!.length + 1, checked: match[2] !== " " });
+      }
+    }
+
+    if (marks.length === 0) {
+      return false;
+    }
+
+    const target = marks.some((mark) => !mark.checked) ? "x" : " ";
+    view.dispatch({
+      changes: marks.map((mark) => ({ from: mark.pos, to: mark.pos + 1, insert: target })),
+    });
+    return true;
   }
 
   /**
@@ -219,9 +286,9 @@ export class ListPlugin extends DecorationPlugin {
 
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
         const line = view.state.doc.lineAt(from);
@@ -233,7 +300,11 @@ export class ListPlugin extends DecorationPlugin {
             break;
 
           case "ListMark":
-            this.decorateListMark(node, line, decorations, cursorInLine);
+            // Narrower than cursorInLine on purpose: the mark reveals its raw
+            // syntax only when the cursor is actually on it, matching the range
+            // the decoration covers. Keying it to the whole line un-styled every
+            // bullet the moment the caret entered its text.
+            this.decorateListMark(node, line, decorations, ctx.cursorInRange(from, to + 1));
             break;
 
           case "TaskMarker":
@@ -296,13 +367,13 @@ export class ListPlugin extends DecorationPlugin {
     node: Parameters<NonNullable<Parameters<ReturnType<typeof syntaxTree>["iterate"]>[0]["enter"]>>[0],
     line: { from: number; to: number },
     decorations: Range<Decoration>[],
-    cursorInLine: boolean
+    cursorOnMark: boolean
   ): void {
     const { from, to } = node;
     const parent = node.node.parent;
     const grandparent = parent?.parent;
     const listType = grandparent?.name;
-    const activeClass = cursorInLine ? classes.active : "";
+    const activeClass = cursorOnMark ? classes.active : "";
 
     // Add indent decoration for nested items
     if (from > line.from) {
@@ -352,10 +423,10 @@ export class ListPlugin extends DecorationPlugin {
   ): string | null {
     switch (node.name) {
       case "BulletList":
-        return `<ul class="${classes.lineUL} ${classes.preview}">${children}</ul>\n`;
+        return `<ul class="${classes.previewList} ${classes.previewUL}">${children}</ul>\n`;
 
       case "OrderedList":
-        return `<ol class="${classes.lineOL} ${classes.preview}">${children}</ol>\n`;
+        return `<ol class="${classes.previewList} ${classes.previewOL}">${children}</ol>\n`;
 
       case "ListItem":
         return `<li>${children}</li>\n`;
@@ -422,15 +493,15 @@ const theme = createTheme({
     // Styled bullet for unordered lists
     ".cm-draftly-list-line-ul .cm-draftly-list-mark-ul:not(.cm-draftly-active)::after": {
       content: '"•"',
-      color: "var(--color-link)",
+      color: "var(--draftly-color-link)",
       fontWeight: "bold",
       pointerEvents: "none",
     },
 
     // Task marker styling (visible when editing)
     ".cm-draftly-task-marker": {
-      color: "var(--draftly-highlight, #a4a4a4)",
-      fontFamily: "monospace",
+      color: "var(--draftly-color-muted)",
+      fontFamily: "var(--draftly-font-mono)",
     },
 
     // Task checkbox container
@@ -465,27 +536,37 @@ const theme = createTheme({
       top: "-3px",
     },
 
-    // Preview styles (override editor-specific layout)
-    ".cm-draftly-preview": {
+    // Preview: a real <ul>/<ol>, styled as one.
+    //
+    // Nesting depth is structural here -- a nested list is a nested element -- so
+    // indentation comes from the child list's own padding and needs no `--depth`.
+    // The editor cannot do that, which is why its line classes carry a computed
+    // padding and why reusing them here would be wrong.
+    ".cm-draftly-list": {
       display: "block",
       paddingLeft: "1.5rem",
       margin: "0.5rem 0",
     },
-    ".cm-draftly-preview li": {
+    ".cm-draftly-list li": {
       display: "list-item",
       marginBottom: "0.25rem",
     },
-    "ul.cm-draftly-preview": {
+    "ul.cm-draftly-list": {
       listStyleType: "disc",
     },
-    "ol.cm-draftly-preview": {
+    "ol.cm-draftly-list": {
       listStyleType: "decimal",
     },
+    // A nested list is already indented by its parent's list item; the wider
+    // top-level margin would double the gap.
+    ".cm-draftly-list .cm-draftly-list": {
+      margin: "0.25rem 0",
+    },
     // Hide list marker for task items
-    ".cm-draftly-preview li:has(.cm-draftly-task-checkbox)": {
+    ".cm-draftly-list li:has(.cm-draftly-task-checkbox)": {
       listStyleType: "none",
     },
-    ".cm-draftly-preview li .cm-draftly-paragraph": {
+    ".cm-draftly-list li .cm-draftly-paragraph": {
       padding: "0",
     },
   },

@@ -1,10 +1,10 @@
-import { Decoration, EditorView, KeyBinding, WidgetType } from "@codemirror/view";
-import { Extension } from "@codemirror/state";
-import { LanguageDescription, syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type EditorView, type KeyBinding, WidgetType } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
+import { LanguageDescription } from "@codemirror/language";
+import { type DecorationContext, DecorationPlugin, type DescribedKeyBinding } from "../editor/plugin";
 import { toggleMarkdownStyle } from "../editor";
-import { Parser, SyntaxNode } from "@lezer/common";
-import { Highlighter, highlightCode } from "@lezer/highlight";
+import type { Parser, SyntaxNode } from "@lezer/common";
+import { type Highlighter, highlightCode } from "@lezer/highlight";
 import { languages } from "@codemirror/language-data";
 import { createWrapSelectionInputHandler } from "../lib";
 import { codePluginTheme as theme } from "./code-plugin.theme";
@@ -21,6 +21,9 @@ const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="1
 
 /** Delay before resetting copy button state (ms) */
 const COPY_RESET_DELAY = 2000;
+
+/** Shown on the copy button when the clipboard write is rejected. */
+const CROSS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
 /** Code fence marker in markdown blocks */
 const CODE_FENCE = "```";
@@ -171,14 +174,7 @@ class CodeBlockHeaderWidget extends WidgetType {
       copyBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        navigator.clipboard.writeText(this.codeContent).then(() => {
-          copyBtn.classList.add("copied");
-          copyBtn.innerHTML = CHECK_ICON;
-          setTimeout(() => {
-            copyBtn.classList.remove("copied");
-            copyBtn.innerHTML = COPY_ICON;
-          }, COPY_RESET_DELAY);
-        });
+        this.copyToClipboard(copyBtn);
       });
 
       rightSide.appendChild(copyBtn);
@@ -186,6 +182,56 @@ class CodeBlockHeaderWidget extends WidgetType {
     }
 
     return header;
+  }
+
+  /**
+   * Handle to the pending "copied" reset.
+   *
+   * Tracked so a rapid second click restarts it rather than racing it, and so
+   * {@link destroy} can cancel it instead of letting it fire against a detached button.
+   */
+  private resetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  override destroy(): void {
+    if (this.resetTimer !== null) {
+      clearTimeout(this.resetTimer);
+      this.resetTimer = null;
+    }
+  }
+
+  /**
+   * Copy the block's code, showing the outcome on the button.
+   *
+   * `navigator.clipboard.writeText` rejects when permission is denied, when the document
+   * is not focused, and over plain HTTP — all of which a docs-site playground in an
+   * iframe hits routinely. It used to have no `.catch()` at all, so the failure was an
+   * unhandled rejection and a button that silently did nothing.
+   *
+   * @param copyBtn - The button to reflect state on
+   */
+  private copyToClipboard(copyBtn: HTMLButtonElement): void {
+    const showResult = (className: string, icon: string, title: string) => {
+      if (!copyBtn.isConnected) return;
+
+      copyBtn.classList.remove("copied", "copy-failed");
+      copyBtn.classList.add(className);
+      copyBtn.innerHTML = icon;
+      copyBtn.title = title;
+
+      if (this.resetTimer !== null) clearTimeout(this.resetTimer);
+      this.resetTimer = setTimeout(() => {
+        this.resetTimer = null;
+        if (!copyBtn.isConnected) return;
+        copyBtn.classList.remove("copied", "copy-failed");
+        copyBtn.innerHTML = COPY_ICON;
+        copyBtn.title = "Copy code";
+      }, COPY_RESET_DELAY);
+    };
+
+    navigator.clipboard
+      .writeText(this.codeContent)
+      .then(() => showResult("copied", CHECK_ICON, "Copied"))
+      .catch(() => showResult("copy-failed", CROSS_ICON, "Copy failed"));
   }
 
   /** Checks equality for widget reuse optimization. */
@@ -268,14 +314,18 @@ export class CodePlugin extends DecorationPlugin {
   /**
    * Keyboard shortcuts for code formatting
    */
-  override getKeymap(): KeyBinding[] {
+  override getKeymap(): DescribedKeyBinding[] {
     return [
       {
+        name: "Inline code",
+        description: "Wrap the selection in backticks",
         key: "Mod-e",
         run: toggleMarkdownStyle("`"),
         preventDefault: true,
       },
       {
+        name: "Code block",
+        description: "Wrap the selection in a fenced code block",
         key: "Mod-Shift-e",
         run: (view) => this.toggleCodeBlock(view),
         preventDefault: true,
@@ -380,9 +430,7 @@ export class CodePlugin extends DecorationPlugin {
     if (firstTokenMatch && firstTokenMatch[1]) {
       const firstToken = firstTokenMatch[1];
       const normalizedToken = firstToken.toLowerCase();
-      const isLineNumberDirective = /^(?:line-numbers|linenumbers|showlinenumbers)(?:\{\d+\})?$/.test(
-        normalizedToken
-      );
+      const isLineNumberDirective = /^(?:line-numbers|linenumbers|showlinenumbers)(?:\{\d+\})?$/.test(normalizedToken);
       const isKnownDirective =
         isLineNumberDirective ||
         normalizedToken === "copy" ||
@@ -397,7 +445,7 @@ export class CodePlugin extends DecorationPlugin {
     }
 
     // Extract quoted values (title="..." caption="...")
-    let quotedMatch;
+    let quotedMatch: RegExpExecArray | null;
     while ((quotedMatch = QUOTED_INFO_PATTERN.exec(remaining)) !== null) {
       const key = quotedMatch[1]?.toLowerCase();
       const value = quotedMatch[2];
@@ -416,7 +464,7 @@ export class CodePlugin extends DecorationPlugin {
     const lineNumbersMatch = remaining.match(/\b(?:line-numbers|lineNumbers|showLineNumbers)(?:\{(\d+)\})?/i);
     if (lineNumbersMatch) {
       if (lineNumbersMatch[1]) {
-        props.showLineNumbers = parseInt(lineNumbersMatch[1], 10);
+        props.showLineNumbers = Number.parseInt(lineNumbersMatch[1], 10);
       } else {
         props.showLineNumbers = true;
       }
@@ -447,7 +495,7 @@ export class CodePlugin extends DecorationPlugin {
     }
 
     // Extract text/regex highlights /pattern/ or /pattern/3-5 or /pattern/3,5
-    let textMatch;
+    let textMatch: RegExpExecArray | null;
     const highlightText: TextHighlight[] = [];
 
     while ((textMatch = TEXT_HIGHLIGHT_PATTERN.exec(remaining)) !== null) {
@@ -480,9 +528,9 @@ export class CodePlugin extends DecorationPlugin {
    * Handles line numbers, highlights, header/caption widgets, and fence visibility.
    */
   buildDecorations(ctx: DecorationContext): void {
-    const tree = syntaxTree(ctx.view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         if (node.name === "InlineCode") {
           this.decorateInlineCode(node, ctx);
@@ -515,7 +563,13 @@ export class CodePlugin extends DecorationPlugin {
     const { view, decorations } = ctx;
     const nodeLineStart = view.state.doc.lineAt(node.from);
     const nodeLineEnd = view.state.doc.lineAt(node.to);
-    const cursorInRange = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineEnd.to);
+    // Two distinct questions that used to share one answer. Line-level styling
+    // relaxes whenever the caret is anywhere in the block, but the ``` fences
+    // should only reappear when the caret is on a fence line itself.
+    const cursorInCodeBlock = ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineEnd.to);
+    const cursorOnFenceLine =
+      ctx.selectionOverlapsRange(nodeLineStart.from, nodeLineStart.to) ||
+      ctx.selectionOverlapsRange(nodeLineEnd.from, nodeLineEnd.to);
 
     let infoProps: CodeBlockProperties = { language: "" };
     let codeContent = "";
@@ -562,8 +616,10 @@ export class CodePlugin extends DecorationPlugin {
     const diffOldLineNumWidth = Math.max(String(startLineNum).length, String(maxOldDiffLineNum).length);
     const diffNewLineNumWidth = Math.max(String(startLineNum).length, String(maxNewDiffLineNum).length);
 
-    const shouldShowHeader = !cursorInRange && (infoProps.title || infoProps.copy || infoProps.language);
-    const shouldShowCaption = !cursorInRange && !!infoProps.caption;
+    // Header and caption are chrome, not syntax: they stay put while editing so
+    // that clicking into a block does not shift every line under the cursor.
+    const shouldShowHeader = !!(infoProps.title || infoProps.copy || infoProps.language);
+    const shouldShowCaption = !!infoProps.caption;
 
     if (shouldShowHeader) {
       decorations.push(
@@ -631,7 +687,7 @@ export class CodePlugin extends DecorationPlugin {
           line,
           codeLineIndex,
           diffStates,
-          cursorInRange,
+          cursorInCodeBlock,
           !infoProps.showLineNumbers,
           decorations
         );
@@ -661,9 +717,11 @@ export class CodePlugin extends DecorationPlugin {
       }
     }
 
-    this.decorateFenceMarkers(node.node, cursorInRange, decorations);
+    this.decorateFenceMarkers(node.node, cursorOnFenceLine, decorations);
 
-    if (!cursorInRange && infoProps.caption) {
+    // Same condition as shouldShowCaption, written against the field so that
+    // TypeScript narrows it for the widget.
+    if (infoProps.caption) {
       decorations.push(
         Decoration.widget({
           widget: new CodeBlockCaptionWidget(infoProps.caption),
@@ -676,13 +734,13 @@ export class CodePlugin extends DecorationPlugin {
 
   private decorateFenceMarkers(
     node: SyntaxNode,
-    cursorInRange: boolean,
+    showFenceMarkers: boolean,
     decorations: DecorationContext["decorations"]
   ): void {
     for (let child = node.firstChild; child; child = child.nextSibling) {
       if (child.name === "CodeMark" || child.name === "CodeInfo") {
         decorations.push(
-          (cursorInRange ? codeMarkDecorations["code-fence"] : codeMarkDecorations["code-hidden"]).range(
+          (showFenceMarkers ? codeMarkDecorations["code-fence"] : codeMarkDecorations["code-hidden"]).range(
             child.from,
             child.to
           )
@@ -835,7 +893,7 @@ export class CodePlugin extends DecorationPlugin {
         } else if (props.language) {
           html += `<span class="cm-draftly-code-header-lang">${this.escapeHtml(props.language)}</span>`;
         }
-        html += `</div>`;
+        html += "</div>";
         if (props.copy !== false) {
           html += `<div class="cm-draftly-code-header-right">`;
           // Encode code as base64 to safely store in data attribute (preserves newlines and special chars)
@@ -843,10 +901,10 @@ export class CodePlugin extends DecorationPlugin {
             typeof btoa !== "undefined" ? btoa(encodeURIComponent(code)) : Buffer.from(code).toString("base64");
           html += `<button class="cm-draftly-code-copy-btn" type="button" title="Copy code" data-code="${encodedCode}" data-encoded="true">`;
           html += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-          html += `</button>`;
-          html += `</div>`;
+          html += "</button>";
+          html += "</div>";
         }
-        html += `</div>`;
+        html += "</div>";
       }
 
       // Calculate line number info
@@ -864,16 +922,10 @@ export class CodePlugin extends DecorationPlugin {
         : [];
       const lineNumWidth = String(Math.max(...previewLineNumbers, startLineNum)).length;
       const previewOldLineNumWidth = String(
-        Math.max(
-          ...previewDiffLineNumbers.map((numbers) => numbers.oldLine ?? 0),
-          startLineNum
-        )
+        Math.max(...previewDiffLineNumbers.map((numbers) => numbers.oldLine ?? 0), startLineNum)
       ).length;
       const previewNewLineNumWidth = String(
-        Math.max(
-          ...previewDiffLineNumbers.map((numbers) => numbers.newLine ?? 0),
-          startLineNum
-        )
+        Math.max(...previewDiffLineNumbers.map((numbers) => numbers.newLine ?? 0), startLineNum)
       ).length;
       const previewContentLines = props.diff ? diffStates.map((state) => state.content) : codeLines;
       const highlightedLines = await this.highlightCodeLines(
@@ -886,7 +938,7 @@ export class CodePlugin extends DecorationPlugin {
       const hasHeader = showHeader ? " cm-draftly-code-block-has-header" : "";
       const hasCaption = props.caption ? " cm-draftly-code-block-has-caption" : "";
       html += `<pre class="cm-draftly-code-block${hasHeader}${hasCaption}"${props.language ? ` data-lang="${this.escapeAttribute(props.language)}"` : ""}>`;
-      html += `<code>`;
+      html += "<code>";
 
       // Process each line
       codeLines.forEach((line, index) => {
@@ -945,7 +997,7 @@ export class CodePlugin extends DecorationPlugin {
         html += `<span ${lineAttrs.join(" ")}>${lineContent || " "}</span>`;
       });
 
-      html += `</code></pre>`;
+      html += "</code></pre>";
 
       // Caption
       if (props.caption) {
@@ -953,7 +1005,7 @@ export class CodePlugin extends DecorationPlugin {
       }
 
       // Close wrapper container
-      html += `</div>`;
+      html += "</div>";
 
       return html;
     }
@@ -975,8 +1027,8 @@ export class CodePlugin extends DecorationPlugin {
       const rangeMatch = trimmed.match(/^(\d+)-(\d+)$/);
 
       if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
-        const start = parseInt(rangeMatch[1], 10);
-        const end = parseInt(rangeMatch[2], 10);
+        const start = Number.parseInt(rangeMatch[1], 10);
+        const end = Number.parseInt(rangeMatch[2], 10);
         for (let i = start; i <= end; i++) {
           result.push(i);
         }
@@ -984,7 +1036,7 @@ export class CodePlugin extends DecorationPlugin {
       }
 
       if (/^\d+$/.test(trimmed)) {
-        result.push(parseInt(trimmed, 10));
+        result.push(Number.parseInt(trimmed, 10));
       }
     }
 

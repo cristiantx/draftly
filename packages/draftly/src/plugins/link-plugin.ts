@@ -1,8 +1,10 @@
-import { Decoration, EditorView, KeyBinding, WidgetType } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type EditorView, type KeyBinding, WidgetType } from "@codemirror/view";
+import { type DecorationContext, DecorationPlugin, type DescribedKeyBinding } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import { safeUrl } from "../lib/safe-url";
+import { escapeHtml } from "../lib/escape-html";
+import { resolveWidgetRange } from "../lib/widget-position";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Mark decorations for link syntax elements
@@ -47,14 +49,27 @@ class LinkTooltipWidget extends WidgetType {
     super();
   }
 
+  /**
+   * Compares **content only**.
+   *
+   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
+   * shift on any edit earlier in the document, so including them made the answer
+   * permanently no -- every link below an edit was rebuilt on every keystroke. The
+   * click handler resolves the range from the live DOM instead, which is also more
+   * correct: the snapshot went stale the moment anything above it changed.
+   */
   override eq(other: LinkTooltipWidget): boolean {
-    return other.url === this.url && other.from === this.from && other.to === this.to;
+    return other.url === this.url;
   }
 
   toDOM(view: EditorView) {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-draftly-link-wrapper";
     wrapper.style.cursor = "pointer";
+    // The native title works where the hover tooltip does not: it is announced by screen
+    // readers and surfaces on long-press. It is also the cheapest way to make Ctrl+Click
+    // discoverable -- nothing in the UI said it existed.
+    wrapper.title = `${this.url} — Ctrl+Click to open`;
 
     // Tooltip element
     const tooltip = document.createElement("span");
@@ -77,13 +92,17 @@ class LinkTooltipWidget extends WidgetType {
         // Ctrl+Click: open in new tab
         e.preventDefault();
         e.stopPropagation();
-        window.open(this.url, "_blank", "noopener,noreferrer");
+        const target = safeUrl(this.url);
+        if (target) {
+          window.open(target, "_blank", "noopener,noreferrer");
+        }
       } else {
         // Regular click: select raw markdown
         e.preventDefault();
         e.stopPropagation();
+        const range = resolveWidgetRange(view, wrapper, ["Link"]) ?? { from: this.from, to: this.to };
         view.dispatch({
-          selection: { anchor: this.from, head: this.to },
+          selection: { anchor: range.from, head: range.to },
           scrollIntoView: true,
         });
         view.focus();
@@ -129,9 +148,11 @@ export class LinkPlugin extends DecorationPlugin {
   /**
    * Keyboard shortcuts for link formatting
    */
-  override getKeymap(): KeyBinding[] {
+  override getKeymap(): DescribedKeyBinding[] {
     return [
       {
+        name: "Link",
+        description: "Turn the selection into a link, or unwrap an existing one",
         key: "Mod-k",
         run: (view) => this.toggleLink(view),
         preventDefault: true,
@@ -175,7 +196,7 @@ export class LinkPlugin extends DecorationPlugin {
 
     // Find link pattern in line that contains the selection
     const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = linkRegex.exec(lineText)) !== null) {
       const matchFrom = lineStart + match.index;
       const matchTo = matchFrom + match[0].length;
@@ -219,9 +240,9 @@ export class LinkPlugin extends DecorationPlugin {
 
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -312,9 +333,13 @@ export class LinkPlugin extends DecorationPlugin {
     const parsed = parseLinkMarkdown(content);
     if (!parsed) return null;
 
-    const textContent = ctx.sanitize(parsed.text);
-    const urlAttr = ctx.sanitize(parsed.url);
-    const titleAttr = parsed.title ? ` title="${ctx.sanitize(parsed.title)}"` : "";
+    // Attribute values are *text*, so they are escaped, not sanitized. DOMPurify
+    // sanitizes an HTML fragment; handed a bare string it returns it essentially
+    // unchanged -- quotes included -- which is how `[x](" onmouseover="alert(1))`
+    // used to inject an attribute here.
+    const textContent = escapeHtml(parsed.text);
+    const urlAttr = escapeHtml(safeUrl(parsed.url));
+    const titleAttr = parsed.title ? ` title="${escapeHtml(parsed.title)}"` : "";
 
     return `<a class="cm-draftly-link" href="${urlAttr}"${titleAttr} target="_blank" rel="noopener noreferrer">${textContent}</a>`;
   }
@@ -334,14 +359,17 @@ class LinkTextWidget extends WidgetType {
     super();
   }
 
+  /**
+   * Compares **content only**.
+   *
+   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
+   * shift on any edit earlier in the document, so including them made the answer
+   * permanently no -- every link below an edit was rebuilt on every keystroke. The
+   * click handler resolves the range from the live DOM instead, which is also more
+   * correct: the snapshot went stale the moment anything above it changed.
+   */
   override eq(other: LinkTextWidget): boolean {
-    return (
-      other.text === this.text &&
-      other.url === this.url &&
-      other.from === this.from &&
-      other.to === this.to &&
-      other.title === this.title
-    );
+    return other.text === this.text && other.url === this.url && other.title === this.title;
   }
 
   toDOM(view: EditorView) {
@@ -350,9 +378,11 @@ class LinkTextWidget extends WidgetType {
     span.textContent = this.text;
     span.style.cursor = "pointer";
 
-    if (this.title) {
-      span.title = this.title;
-    }
+    // The URL only existed in a hover tooltip, so it was undiscoverable by keyboard, by
+    // screen reader, and on touch. The native title covers all three, and carries the
+    // otherwise-invisible Ctrl+Click affordance.
+    span.title = this.title ? `${this.title} — ${this.url} — Ctrl+Click to open` : `${this.url} — Ctrl+Click to open`;
+    span.setAttribute("aria-label", `${this.text}, link to ${this.url}`);
 
     // Tooltip element
     const tooltip = document.createElement("span");
@@ -375,13 +405,17 @@ class LinkTextWidget extends WidgetType {
         // Ctrl+Click: open in new tab
         e.preventDefault();
         e.stopPropagation();
-        window.open(this.url, "_blank", "noopener,noreferrer");
+        const target = safeUrl(this.url);
+        if (target) {
+          window.open(target, "_blank", "noopener,noreferrer");
+        }
       } else {
         // Regular click: select raw markdown
         e.preventDefault();
         e.stopPropagation();
+        const range = resolveWidgetRange(view, span, ["Link"]) ?? { from: this.from, to: this.to };
         view.dispatch({
-          selection: { anchor: this.from, head: this.to },
+          selection: { anchor: range.from, head: range.to },
           scrollIntoView: true,
         });
         view.focus();
@@ -404,18 +438,18 @@ const theme = createTheme({
   default: {
     // Link text
     ".cm-draftly-link-text": {
-      color: "#0366d6",
+      color: "var(--draftly-color-link)",
     },
 
     // Link markers ([ ] ( ))
     ".cm-draftly-link-marker": {
-      color: "#6a737d",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      color: "var(--draftly-color-muted)",
+      fontFamily: "var(--draftly-font-mono)",
     },
 
     // URL in raw markdown
     ".cm-draftly-link-url": {
-      color: "#6a737d",
+      color: "var(--draftly-color-muted)",
       fontStyle: "italic",
     },
 
@@ -426,24 +460,24 @@ const theme = createTheme({
 
     // Styled link when cursor is not in range
     ".cm-draftly-link-styled": {
-      color: "#0366d6",
+      color: "var(--draftly-color-link)",
       textDecoration: "underline",
       position: "relative",
       cursor: "pointer",
     },
 
     ".cm-draftly-link-styled:hover": {
-      color: "#0056b3",
+      color: "var(--draftly-color-link-hover)",
     },
 
     // Preview link styling
     ".cm-draftly-link": {
-      color: "#0366d6",
+      color: "var(--draftly-color-link)",
       textDecoration: "underline",
     },
 
     ".cm-draftly-link:hover": {
-      color: "#0056b3",
+      color: "var(--draftly-color-link-hover)",
     },
 
     // Tooltip styling
@@ -453,8 +487,8 @@ const theme = createTheme({
       bottom: "100%",
       left: "50%",
       transform: "translateX(-50%)",
-      backgroundColor: "#24292e",
-      color: "#ffffff",
+      backgroundColor: "var(--draftly-color-tooltip-bg)",
+      color: "var(--draftly-color-tooltip-fg)",
       padding: "4px 8px",
       borderRadius: "4px",
       fontSize: "12px",
@@ -469,41 +503,6 @@ const theme = createTheme({
 
     ".cm-draftly-link-tooltip-visible": {
       display: "block",
-    },
-  },
-
-  dark: {
-    ".cm-draftly-link-text": {
-      color: "#58a6ff",
-    },
-
-    ".cm-draftly-link-marker": {
-      color: "#8b949e",
-    },
-
-    ".cm-draftly-link-url": {
-      color: "#8b949e",
-    },
-
-    ".cm-draftly-link-styled": {
-      color: "#58a6ff",
-    },
-
-    ".cm-draftly-link-styled:hover": {
-      color: "#79c0ff",
-    },
-
-    ".cm-draftly-link": {
-      color: "#58a6ff",
-    },
-
-    ".cm-draftly-link:hover": {
-      color: "#79c0ff",
-    },
-
-    ".cm-draftly-link-tooltip": {
-      backgroundColor: "#30363d",
-      color: "#c9d1d9",
     },
   },
 });

@@ -1,31 +1,145 @@
-import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { Extension } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
-import { DecorationContext, DecorationPlugin } from "../editor/plugin";
+import { Decoration, type EditorView, WidgetType } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
+import { type DecorationContext, DecorationPlugin } from "../editor/plugin";
 import { createTheme } from "../editor";
-import { SyntaxNode } from "@lezer/common";
+import { resolveWidgetRange } from "../lib/widget-position";
+import { parseMixed, type Parser, type SyntaxNode } from "@lezer/common";
 import { tags } from "@lezer/highlight";
 import type { MarkdownConfig, InlineParser, BlockParser, Line, BlockContext } from "@lezer/markdown";
 import katex from "katex";
 import { createWrapSelectionInputHandler } from "../lib";
-// @ts-expect-error - raw import for CSS as string
-import katexCss from "katex/dist/katex.min.css?raw";
 
 /**
- * Inject KaTeX CSS into the document head (only once)
+ * Options for {@link MathPlugin}.
+ */
+export interface MathPluginOptions {
+  /**
+   * A LaTeX parser to overlay on math content, for syntax highlighting of the raw
+   * source while the cursor is inside a formula.
+   *
+   * Injected rather than bundled. The obvious candidate, `codemirror-lang-latex`,
+   * is AGPL-3.0-or-later, and draftly is MIT — depending on it would push its
+   * terms onto every consumer. Passing the parser in leaves that decision where
+   * it belongs.
+   *
+   * @example
+   * ```ts
+   * import { latexLanguage } from "codemirror-lang-latex";
+   * import { styleTags } from "@lezer/highlight";
+   * import { MathPlugin, latexHighlightTags } from "draftly/plugins";
+   *
+   * new MathPlugin({
+   *   mathParser: latexLanguage.parser.configure({
+   *     props: [styleTags(latexHighlightTags)],
+   *   }),
+   * });
+   * ```
+   */
+  mathParser?: Parser;
+
+  /**
+   * Inject KaTeX's stylesheet — fonts included — into the document head.
+   *
+   * Defaults to `false`, which means Draftly ships no math CSS at all and the consumer
+   * imports `katex/dist/katex.min.css` themselves. That is the cheap path: the stylesheet
+   * plus its 20 inlined font faces is ~360 KB, and a build that already handles CSS and
+   * font assets does it better.
+   *
+   * Set it to `true` when there is no such build step — a `<script>` tag, a CDN, an
+   * embedded editor — and Draftly will inject the whole thing once per document. The
+   * fonts are `data:` URIs rather than relative `fonts/KaTeX_*` paths, which is what makes
+   * a `<style>` element viable at all: KaTeX's own rules resolve against the *page* URL
+   * and 404 for every consumer who does not happen to serve the fonts from there.
+   *
+   * The stylesheet lives behind a dynamic `import()` and tsup emits it as its own chunk on
+   * both formats, so leaving this at `false` costs nothing.
+   *
+   * @defaultValue false
+   */
+  injectStyles?: boolean;
+}
+
+/**
+ * Style tags for LaTeX node types that `codemirror-lang-latex` leaves untagged.
+ *
+ * Its parser specializes many control sequences (`\text`, `\hbox`, `\href`,
+ * sectioning, list, table and colour macros) into named node types that its own
+ * `styleTags` does not cover, so they highlight as plain text next to the generic
+ * `CtrlSeq` token. This is the missing half; pass it to `styleTags()` when
+ * configuring a parser for {@link MathPluginOptions.mathParser}.
+ *
+ * Node type names only — no code from that package is reproduced here.
+ */
+export const latexHighlightTags: Record<string, typeof tags.keyword> = {
+  [[
+    "MathTextCtrlSeq HboxCtrlSeq DefCtrlSeq LetCtrlSeq LeftCtrlSeq RightCtrlSeq",
+    "ItemCtrlSeq CenteringCtrlSeq MaketitleCtrlSeq HrefCtrlSeq UrlCtrlSeq",
+    "VerbCtrlSeq LstInlineCtrlSeq IncludeGraphicsCtrlSeq IncludeSvgCtrlSeq",
+    "CaptionCtrlSeq InputCtrlSeq IncludeCtrlSeq SubfileCtrlSeq",
+    "NewCommandCtrlSeq RenewCommandCtrlSeq NewEnvironmentCtrlSeq",
+    "RenewEnvironmentCtrlSeq NewTheoremCtrlSeq TheoremStyleCtrlSeq",
+    "HLineCtrlSeq TopRuleCtrlSeq MidRuleCtrlSeq BottomRuleCtrlSeq",
+    "MultiColumnCtrlSeq ParBoxCtrlSeq TextColorCtrlSeq ColorBoxCtrlSeq",
+    "TextMediumCtrlSeq TextSansSerifCtrlSeq TextSuperscriptCtrlSeq",
+    "TextSubscriptCtrlSeq TextStrikeOutCtrlSeq SetLengthCtrlSeq",
+    "FootnoteCtrlSeq EndnoteCtrlSeq AffilCtrlSeq AffiliationCtrlSeq",
+  ].join(" ")]: tags.keyword,
+  "OpenParenCtrlSym CloseParenCtrlSym OpenBracketCtrlSym CloseBracketCtrlSym LineBreakCtrlSym": tags.operator,
+};
+
+/**
+ * Inject KaTeX's stylesheet into the document head, at most once per document.
+ *
+ * Called from the `MathPlugin` constructor when {@link MathPluginOptions.injectStyles} is
+ * set, rather than at module scope. Module-scope DOM mutation runs on `import`, which
+ * makes the module unconditionally side-effecting — a bundler must then keep it even for a
+ * consumer who never writes a formula — and it touches `document` during SSR module
+ * evaluation, where there is none.
+ *
+ * The stylesheet is `import()`ed rather than imported so that the ~360 KB of inlined fonts
+ * lands in its own chunk and never loads on the default path. That makes injection
+ * asynchronous: a formula rendered in the same tick paints in a fallback face for a moment.
+ * Injecting from the constructor rather than from `renderMath` keeps that window as short
+ * as it can be.
+ *
+ * The guard is the element lookup plus an in-flight flag, so this stays correct across
+ * multiple editors, concurrent construction, and hot reloads.
+ *
+ * @returns Nothing; failures are reported to the console rather than thrown, because there
+ * is no caller left to catch them by the time the import settles
  */
 function injectKatexStyles(): void {
   if (typeof document === "undefined") return;
-  if (document.getElementById("draftly-katex-styles")) return;
+  if (katexStylesRequested) return;
+  if (document.getElementById(KATEX_STYLE_ID)) return;
+  katexStylesRequested = true;
 
-  const style = document.createElement("style");
-  style.id = "draftly-katex-styles";
-  style.textContent = katexCss;
-  document.head.appendChild(style);
+  import("./katex-styles.generated")
+    .then(({ katexStyles }) => {
+      if (document.getElementById(KATEX_STYLE_ID)) return;
+      const style = document.createElement("style");
+      style.id = KATEX_STYLE_ID;
+      style.textContent = katexStyles;
+      document.head.appendChild(style);
+    })
+    .catch((e: unknown) => {
+      katexStylesRequested = false;
+      console.error("[draftly] Failed to load KaTeX styles:", e);
+    });
 }
 
-// Inject styles when module loads
-injectKatexStyles();
+/** Identifies the injected `<style>` element, so a second editor does not add another. */
+const KATEX_STYLE_ID = "draftly-katex-styles";
+
+/**
+ * Whether a stylesheet load is in flight or has completed.
+ *
+ * Deliberately module-scoped: the target is `document.head`, which is shared by every
+ * editor on the page, so "has this been injected yet" is a per-document question rather
+ * than a per-plugin one. Reset on failure so a transient network error can be retried by
+ * the next editor.
+ */
+let katexStylesRequested = false;
 
 // Character codes
 const DOLLAR = 36; // '$'
@@ -41,7 +155,12 @@ const mathMarkDecorations = {
 };
 
 /**
- * Render LaTeX to HTML using KaTeX
+ * Render LaTeX to HTML using KaTeX.
+ *
+ * KaTeX's default output is `htmlAndMathml`: the visual layer is marked `aria-hidden` and
+ * a MathML representation sits beside it, so the formula is already readable by assistive
+ * technology. **Do not add an `aria-label` to the container** — it would override the
+ * MathML with a flat string and make accessibility worse, not better.
  */
 function renderMath(latex: string, displayMode: boolean): { html: string; error: string | null } {
   try {
@@ -71,8 +190,16 @@ class InlineMathWidget extends WidgetType {
     super();
   }
 
+  /**
+   * Compares **content only**.
+   *
+   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
+   * shift on any edit earlier in the document, so including them made the answer
+   * permanently no -- every formula below an edit was torn down and re-rendered
+   * through KaTeX on every keystroke. The handlers resolve the range from the live DOM instead.
+   */
   override eq(other: InlineMathWidget): boolean {
-    return other.latex === this.latex && other.from === this.from && other.to === this.to;
+    return other.latex === this.latex;
   }
 
   toDOM(view: EditorView) {
@@ -83,7 +210,8 @@ class InlineMathWidget extends WidgetType {
     const { html, error } = renderMath(this.latex, false);
 
     if (error) {
-      span.className += " cm-draftly-math-error";
+      span.classList.add("cm-draftly-math-error");
+      span.setAttribute("role", "alert");
       span.textContent = `[Math Error: ${error}]`;
     } else {
       span.innerHTML = html;
@@ -93,8 +221,9 @@ class InlineMathWidget extends WidgetType {
     span.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const range = resolveWidgetRange(view, span, ["InlineMath"]) ?? { from: this.from, to: this.to };
       view.dispatch({
-        selection: { anchor: this.from, head: this.to },
+        selection: { anchor: range.from, head: range.to },
         scrollIntoView: true,
       });
       view.focus();
@@ -120,8 +249,16 @@ class MathBlockWidget extends WidgetType {
     super();
   }
 
+  /**
+   * Compares **content only**.
+   *
+   * `eq()` answers "can CodeMirror keep the DOM it already built?". Document positions
+   * shift on any edit earlier in the document, so including them made the answer
+   * permanently no -- every block formula below an edit re-rendered through
+   * KaTeX on every keystroke. The handlers resolve the range from the live DOM instead.
+   */
   override eq(other: MathBlockWidget): boolean {
-    return other.latex === this.latex && other.from === this.from && other.to === this.to;
+    return other.latex === this.latex;
   }
 
   toDOM(view: EditorView) {
@@ -132,7 +269,8 @@ class MathBlockWidget extends WidgetType {
     const { html, error } = renderMath(this.latex, true);
 
     if (error) {
-      div.className += " cm-draftly-math-error";
+      div.classList.add("cm-draftly-math-error");
+      div.setAttribute("role", "alert");
       div.textContent = `[Math Error: ${error}]`;
     } else {
       div.innerHTML = html;
@@ -142,8 +280,9 @@ class MathBlockWidget extends WidgetType {
     div.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const range = resolveWidgetRange(view, div, ["MathBlock"]) ?? { from: this.from, to: this.to };
       view.dispatch({
-        selection: { anchor: this.from, head: this.to },
+        selection: { anchor: range.from, head: range.to },
         scrollIntoView: true,
       });
       view.focus();
@@ -206,43 +345,56 @@ const inlineMathParser: InlineParser = {
 };
 
 /**
- * Block parser for math blocks: $$...$$
+ * Block parser for math blocks: `$$...$$`
+ *
+ * Accepts both the fenced form, where the delimiters sit on their own lines, and
+ * the single-line form `$$x^2$$`. The single-line form is only claimed when it
+ * occupies the whole line; with trailing content the line is left to the
+ * paragraph and inline-math parsers rather than silently swallowing the rest.
  */
 const mathBlockParser: BlockParser = {
   name: "MathBlock",
   parse(cx: BlockContext, line: Line) {
-    // Check if line starts with $$
     const text = line.text;
-    const trimmed = text.slice(line.pos).trimStart();
 
-    if (!trimmed.startsWith("$$")) return false;
+    // `line.pos` is already past any container prefix (list bullet, blockquote
+    // marker). Offsets are measured against the raw line so that they stay
+    // valid document positions.
+    const openIndex = text.indexOf("$$", line.pos);
+    if (openIndex === -1) return false;
+    if (text.slice(line.pos, openIndex).trim() !== "") return false;
 
-    // Find the end of the math block
     const startLine = cx.lineStart;
+    const openMarkStart = startLine + openIndex;
     let endPos = -1;
-    let lastLineEnd = startLine + line.text.length;
 
-    // Move past the opening line
-    while (cx.nextLine()) {
-      const currentText = line.text;
-      lastLineEnd = cx.lineStart + currentText.length;
+    const sameLineClose = text.indexOf("$$", openIndex + 2);
+    if (sameLineClose !== -1) {
+      // Single-line form. Anything after the closing fence means this is not a
+      // block; bail so the rest of the line still gets parsed.
+      if (text.slice(sameLineClose + 2).trim() !== "") return false;
+      endPos = startLine + sameLineClose + 2;
+      cx.nextLine();
+    } else {
+      while (cx.nextLine()) {
+        const currentText = line.text;
+        const closeIndex = currentText.lastIndexOf("$$");
 
-      // Check if this line contains closing $$
-      if (currentText.trimEnd().endsWith("$$")) {
-        endPos = lastLineEnd;
-        // Move past the closing line so subsequent markdown gets parsed
-        cx.nextLine();
-        break;
+        // The closing fence must end the line, but trailing whitespace is fine —
+        // and the fence position, not the line end, is what bounds the mark.
+        if (closeIndex !== -1 && currentText.slice(closeIndex + 2).trim() === "") {
+          endPos = cx.lineStart + closeIndex + 2;
+          // Move past the closing line so subsequent markdown gets parsed.
+          cx.nextLine();
+          break;
+        }
       }
     }
 
-    if (endPos === -1) {
-      // No closing found, treat as regular paragraph
-      return false;
-    }
+    // No closing fence: treat as a regular paragraph.
+    if (endPos === -1) return false;
 
-    // Create the math block element
-    const openMark = cx.elt("MathBlockMark", startLine, startLine + text.indexOf("$$") + 2);
+    const openMark = cx.elt("MathBlockMark", openMarkStart, openMarkStart + 2);
     const closeMark = cx.elt("MathBlockMark", endPos - 2, endPos);
     cx.addElement(cx.elt("MathBlock", startLine, endPos, [openMark, closeMark]));
 
@@ -270,8 +422,17 @@ export class MathPlugin extends DecorationPlugin {
   override decorationPriority = 25;
   override readonly requiredNodes = ["InlineMath", "MathBlock", "InlineMathMark", "MathBlockMark"] as const;
 
-  constructor() {
+  /** A LaTeX parser overlaid on math content, when the host supplied one. */
+  private readonly mathParser: Parser | undefined;
+
+  /**
+   * @param options - LaTeX parser for highlighting raw math source, and whether to inject
+   * KaTeX's stylesheet; see {@link MathPluginOptions}
+   */
+  constructor(options: MathPluginOptions = {}) {
     super();
+    this.mathParser = options.mathParser;
+    if (options.injectStyles) injectKatexStyles();
   }
 
   /**
@@ -288,7 +449,7 @@ export class MathPlugin extends DecorationPlugin {
    * with single dollars (selected -> $selected$).
    */
   override getExtensions(): Extension[] {
-    return [createWrapSelectionInputHandler({ "$": "$" })];
+    return [createWrapSelectionInputHandler({ $: "$" })];
   }
 
   /**
@@ -304,7 +465,25 @@ export class MathPlugin extends DecorationPlugin {
       ],
       parseInline: [inlineMathParser],
       parseBlock: [mathBlockParser],
+      ...(this.mathParser ? { wrap: this.buildMathOverlay(this.mathParser) } : {}),
     };
+  }
+
+  /**
+   * Overlay a LaTeX parser onto math node contents.
+   *
+   * The overlay spans the `$`/`$$` markers rather than stopping short of them, so
+   * the LaTeX parser enters math mode and tokenises operators and identifiers as
+   * math rather than as prose.
+   *
+   * @param parser - The LaTeX parser to overlay
+   * @returns A mixed-parser wrapper for the markdown parser
+   */
+  private buildMathOverlay(parser: Parser) {
+    return parseMixed((node) => {
+      if (node.name !== "InlineMath" && node.name !== "MathBlock") return null;
+      return { parser, overlay: [{ from: node.from, to: node.to }] };
+    });
   }
 
   /**
@@ -312,9 +491,9 @@ export class MathPlugin extends DecorationPlugin {
    */
   buildDecorations(ctx: DecorationContext): void {
     const { view, decorations } = ctx;
-    const tree = syntaxTree(view.state);
-
-    tree.iterate({
+    // Scoped to the viewport: an unbounded walk makes every update -- including a
+    // plain cursor move -- cost O(document). See DecorationContext.iterateVisible.
+    ctx.iterateVisible({
       enter: (node) => {
         const { from, to, name } = node;
 
@@ -445,7 +624,7 @@ export class MathPlugin extends DecorationPlugin {
 const theme = createTheme({
   default: {
     ".cm-draftly-math-block": {
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      fontFamily: "var(--draftly-font-mono)",
     },
 
     ".cm-draftly-math-block br": {
@@ -454,13 +633,13 @@ const theme = createTheme({
 
     // Math markers ($ $$)
     ".cm-draftly-math-marker": {
-      color: "#6a737d",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      color: "var(--draftly-color-muted)",
+      fontFamily: "var(--draftly-font-mono)",
     },
 
     // Inline math styling when editing
     ".cm-draftly-math-inline": {
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
+      fontFamily: "var(--draftly-font-mono)",
       fontSize: "0.9em",
     },
 
@@ -491,7 +670,7 @@ const theme = createTheme({
       justifyContent: "center",
       alignItems: "center",
       padding: "1em 0",
-      backgroundColor: "rgba(0, 0, 0, 0.02)",
+      backgroundColor: "var(--draftly-tint-1)",
       borderRadius: "4px",
       overflow: "auto",
     },
@@ -500,27 +679,12 @@ const theme = createTheme({
     ".cm-draftly-math-error": {
       display: "inline-block",
       padding: "0.25em 0.5em",
-      backgroundColor: "rgba(255, 0, 0, 0.1)",
-      color: "#d73a49",
+      backgroundColor: "var(--draftly-color-error-surface)",
+      color: "var(--draftly-color-danger)",
       borderRadius: "4px",
       fontSize: "0.875em",
       fontStyle: "italic",
-      fontFamily: "var(--font-jetbrains-mono, monospace)",
-    },
-  },
-
-  dark: {
-    ".cm-draftly-math-marker": {
-      color: "#8b949e",
-    },
-
-    ".cm-draftly-math-rendered-block": {
-      backgroundColor: "rgba(255, 255, 255, 0.02)",
-    },
-
-    ".cm-draftly-math-error": {
-      backgroundColor: "rgba(255, 0, 0, 0.15)",
-      color: "#f85149",
+      fontFamily: "var(--draftly-font-mono)",
     },
   },
 });

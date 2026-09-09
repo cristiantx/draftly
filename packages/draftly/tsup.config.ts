@@ -1,7 +1,19 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/editor/index.ts", "src/plugins/index.ts", "src/preview/index.ts", "src/lib/index.ts"],
+  entry: [
+    "src/index.ts",
+    "src/editor/index.ts",
+    "src/plugins/index.ts",
+    "src/preview/index.ts",
+    "src/lib/index.ts",
+    // Heavy plugins get their own entry points so they land in their own chunks; see
+    // src/plugins/index.ts for why keeping them in the barrel leaked into every import.
+    "src/plugins/mermaid.ts",
+    "src/plugins/math.ts",
+    "src/plugins/emoji.ts",
+    "src/plugins/all.ts",
+  ],
   format: ["esm", "cjs"],
   dts: true,
   outDir: "dist",
@@ -19,12 +31,8 @@ export default defineConfig({
     "@lezer/markdown",
     "@lezer/common",
     "@lezer/highlight",
+    // A peer dependency since C-029 — bundling it would ship a second copy alongside the
+    // consumer's own, and the `katex/dist/katex.min.css` they are told to import.
+    "katex",
   ],
-  esbuildOptions(options) {
-    // Handle ?raw imports - load CSS as text
-    options.loader = {
-      ...options.loader,
-      ".css": "text",
-    };
-  },
 });

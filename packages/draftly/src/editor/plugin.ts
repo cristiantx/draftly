@@ -1,10 +1,47 @@
-import { Decoration, EditorView, KeyBinding, ViewUpdate } from "@codemirror/view";
-import { Extension, Range } from "@codemirror/state";
-import { MarkdownConfig } from "@lezer/markdown";
-import { SyntaxNode } from "@lezer/common";
-import { DraftlyConfig } from "./draftly";
-import { createTheme, ThemeEnum, ThemeStyle } from "./utils";
+import type { Decoration, EditorView, KeyBinding, ViewUpdate } from "@codemirror/view";
+import type { Extension, Range } from "@codemirror/state";
+import type { MarkdownConfig } from "@lezer/markdown";
+import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
+import type { DraftlyConfig } from "./draftly";
+import { createTheme, type ThemeEnum, type ThemeStyle } from "./utils";
+import { resolvePluginTheme } from "./theme-cache";
 import { StyleModule } from "style-mod";
+
+/**
+ * Shared no-op theme resolver for plugins that do not override `theme`.
+ *
+ * Module-level so the base-class getter returns a *stable* value. It previously
+ * built a new `createTheme(...)` closure per access, which broke identity-based
+ * memoization for every subclass that did not override the getter.
+ */
+const emptyThemeResolver = createTheme({
+  default: {},
+  dark: {},
+  light: {},
+});
+
+/**
+ * A CodeMirror {@link KeyBinding} carrying the metadata a shortcut reference needs.
+ *
+ * Plugins return these from {@link DraftlyPlugin.getKeymap}, and because the type
+ * only adds fields, CodeMirror consumes them unmodified. The fields are required
+ * so that a shortcut cannot ship without a name a user can read.
+ */
+export interface DescribedKeyBinding extends KeyBinding {
+  /** Short action name, e.g. `"Bold"`. */
+  name: string;
+
+  /** One line describing what the shortcut does. */
+  description: string;
+
+  /**
+   * Where the binding applies, when it is not global -- e.g. `"Inside a table"`.
+   *
+   * Context-scoped bindings often rebind keys that mean something else elsewhere
+   * (`Tab`, `Enter`), so a reference that lists them flat is misleading.
+   */
+  context?: string;
+}
 
 /**
  * Context passed to plugin lifecycle methods
@@ -22,6 +59,24 @@ export interface PluginConfig {
 }
 
 /**
+ * Spec for {@link DecorationContext.iterateVisible}.
+ *
+ * Mirrors the subset of Lezer's `iterate` options a decoration builder needs; `from`
+ * and `to` are supplied by the context, which is the entire point.
+ */
+export interface VisibleIterateSpec {
+  /**
+   * Called on entering a node. Return `false` to skip its subtree.
+   */
+  enter(node: SyntaxNodeRef): boolean | void;
+
+  /**
+   * Called on leaving a node whose `enter` did not return `false`.
+   */
+  leave?(node: SyntaxNodeRef): void;
+}
+
+/**
  * Decoration context passed to plugin decoration builders
  * Provides access to view state and decoration collection
  */
@@ -31,6 +86,30 @@ export interface DecorationContext {
 
   /** Array to push decorations into (will be sorted automatically) */
   readonly decorations: Range<Decoration>[];
+
+  /**
+   * The document ranges CodeMirror has actually rendered.
+   *
+   * Falls back to the whole document when the view has not measured yet, so this is
+   * never empty.
+   */
+  readonly visibleRanges: readonly { readonly from: number; readonly to: number }[];
+
+  /**
+   * Walk the syntax tree, **scoped to the viewport**.
+   *
+   * Use this instead of `syntaxTree(view.state).iterate(...)`. An unbounded walk makes
+   * every update cost O(document) — including a plain cursor move, which rebuilds
+   * decorations just like an edit does. With 14 plugins that was 14 full-document walks
+   * per keystroke.
+   *
+   * Nodes that merely *overlap* a visible range are still entered, so a construct half
+   * off-screen is decorated in full. When the viewport is split into several ranges,
+   * a node spanning the gap is entered once, not once per range.
+   *
+   * @param spec - `enter`, and optionally `leave`
+   */
+  iterateVisible(spec: VisibleIterateSpec): void;
 
   /** Check if selection overlaps with a range (to show raw markdown) */
   selectionOverlapsRange(from: number, to: number): boolean;
@@ -46,6 +125,24 @@ export interface DecorationContext {
  * - Abstraction: abstract name/version must be implemented by subclasses
  * - Encapsulation: private _config, protected _context
  * - Inheritance: specialized plugin classes can extend this
+ *
+ * ## Instance lifetime, and the rule that follows from it
+ *
+ * **One plugin instance belongs to one editor.** `createEssentialPlugins()` and
+ * `createAllPlugins()` construct a fresh set per call precisely so that a consumer cannot
+ * accidentally share one.
+ *
+ * **A plugin must not hold state that belongs to a view.** Anything derived from a
+ * specific `EditorView` — a pending timer, a scheduled microtask's target, a cached
+ * measurement, the view itself — either keys off the view (a `WeakMap` or a CodeMirror
+ * `StateField`) or is released in {@link DraftlyPlugin.onViewDestroy}. Two things go wrong
+ * otherwise, and both are silent: with a shared instance, one editor overwrites another's
+ * state, and with any instance, a retained view retains its document for the lifetime of
+ * the page.
+ *
+ * `_config` and `_context` are the one sanctioned exception, and only because they are
+ * written once at composition time by {@link DraftlyPlugin.onRegister}. They are still
+ * per-editor state, which is why the factories exist.
  */
 export abstract class DraftlyPlugin {
   /** Unique plugin identifier (abstract - must be implemented) */
@@ -54,7 +151,21 @@ export abstract class DraftlyPlugin {
   /** Plugin version (abstract - must be implemented) */
   abstract readonly version: string;
 
-  /** Decoration priority (higher = applied later) */
+  /**
+   * Priority of this plugin relative to others, on **both** surfaces.
+   *
+   * - **Editor:** plugins are sorted *ascending* and all of them run. Later decorations
+   *   layer over earlier ones, so a higher number wins visually.
+   * - **Preview:** candidates for a node are tried in *descending* order and the first
+   *   non-null `renderToHTML` result wins. So a higher number wins here too.
+   *
+   * The sorts point opposite ways because the composition models differ — layering
+   * versus precedence — and that is exactly what makes one number mean the same thing
+   * on both surfaces. Two plugins claiming the same node at the same priority is
+   * ambiguous and warns in development.
+   *
+   * Pick a value inside an existing band; see `artifacts/architecture/plugin-system.md`.
+   */
   readonly decorationPriority: number = 100;
 
   /** Plugin dependencies - names of required plugins */
@@ -84,13 +195,15 @@ export abstract class DraftlyPlugin {
     return this._context;
   }
 
-  /** Plugin theme */
+  /**
+   * Plugin theme resolver.
+   *
+   * Overrides must return a **module-level constant**, not a fresh `createTheme(...)`
+   * per access — the resolved styles and the `EditorView.theme()` extension are both
+   * memoized per `(plugin, ThemeEnum)` pair, and an unstable getter defeats that.
+   */
   get theme(): (theme: ThemeEnum) => ThemeStyle {
-    return createTheme({
-      default: {},
-      dark: {},
-      light: {},
-    });
+    return emptyThemeResolver;
   }
 
   // ============================================
@@ -116,9 +229,25 @@ export abstract class DraftlyPlugin {
   /**
    * Return keybindings for this plugin
    * Override to add custom keyboard shortcuts
+   *
+   * @returns Bindings to register, each carrying its own documentation
    */
-  getKeymap(): KeyBinding[] {
+  getKeymap(): DescribedKeyBinding[] {
     return [];
+  }
+
+  /**
+   * Return every shortcut this plugin wants listed in a shortcut reference.
+   *
+   * Defaults to {@link getKeymap}. Override when a plugin registers bindings some
+   * other way -- `TablePlugin` wraps its bindings in `Prec.highest()` and scopes
+   * them to a table, so they never pass through `getKeymap()` even though a user
+   * still needs to know they exist.
+   *
+   * @returns Documented shortcuts, registered or otherwise
+   */
+  getShortcuts(): DescribedKeyBinding[] {
+    return this.getKeymap();
   }
 
   // ============================================
@@ -151,8 +280,19 @@ export abstract class DraftlyPlugin {
   }
 
   /**
-   * Called when plugin is unregistered
-   * Override to perform cleanup
+   * Called when plugin is unregistered.
+   *
+   * @deprecated **Nothing calls this.** `onRegister` runs from `draftly()`, and there is
+   * no corresponding teardown of an extension bundle to hang an unregister off.
+   *
+   * T-017 removed the *second* reason it could not be wired to view destruction — with
+   * per-editor instances from `createEssentialPlugins()`, clearing `_context` no longer
+   * breaks other editors. It remains uncalled because the first reason stands: plugin
+   * registration is not scoped to a view, so there is no event to fire it on. A consumer
+   * still holding the deprecated shared arrays would also still be broken by it.
+   *
+   * Use {@link onViewDestroy} to release view-scoped state. This hook is kept rather than
+   * removed because it is public API.
    */
   onUnregister(): void {
     this._context = null;
@@ -175,6 +315,24 @@ export abstract class DraftlyPlugin {
    * @param update - The ViewUpdate with change information
    */
   onViewUpdate(_update: ViewUpdate): void {
+    // Default implementation does nothing
+  }
+
+  /**
+   * Called when the `EditorView` is torn down. Symmetric with {@link onViewReady}.
+   *
+   * **Any plugin holding view-scoped state must release it here.** Plugin instances are
+   * module-level singletons that outlive every view, so a retained `EditorView` retains
+   * its DOM, its state and the whole document for the lifetime of the page. Pending
+   * timers and microtasks holding a view are the usual culprits.
+   *
+   * Called from the view plugin's own `destroy()`, so it fires for every reconfigure as
+   * well as for a real teardown — hosts that rebuild their extension array do this
+   * routinely.
+   *
+   * @param view - The view being destroyed
+   */
+  onViewDestroy(_view: EditorView): void {
     // Default implementation does nothing
   }
 
@@ -206,10 +364,15 @@ export abstract class DraftlyPlugin {
    * Render a syntax node to HTML for preview mode
    * Override to provide custom HTML rendering for specific node types
    *
+   * Returning `null` **declines**: the next candidate plugin for this node is tried,
+   * then the default renderer, then the escaped leaf fallback. Returning `""` is not the
+   * same thing — it renders the node as nothing, which is how syntax markers are dropped
+   * from static output.
+   *
    * @param node - The syntax node to render
    * @param children - Pre-rendered children HTML
    * @param ctx - Preview context with document and utilities
-   * @returns HTML string to use, or null to use default rendering
+   * @returns HTML to use, `""` to render nothing, or `null` to decline
    */
   renderToHTML?(
     node: SyntaxNode,
@@ -229,8 +392,7 @@ export abstract class DraftlyPlugin {
    * @returns CSS string for preview styles
    */
   getPreviewStyles(theme: ThemeEnum, wrapperClass: string): string {
-    const themeStyles = this.theme(theme);
-    return this.transformToCss(themeStyles, wrapperClass);
+    return this.transformToCss(resolvePluginTheme(this, theme), wrapperClass);
   }
 
   /**
