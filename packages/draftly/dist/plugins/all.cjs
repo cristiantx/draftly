@@ -1,7 +1,7 @@
 'use strict';
 
 var chunk7BSQYD3N_cjs = require('../chunk-7BSQYD3N.cjs');
-var chunkDDRW2SA3_cjs = require('../chunk-DDRW2SA3.cjs');
+var chunkX5KXQPCN_cjs = require('../chunk-X5KXQPCN.cjs');
 require('../chunk-EWK52CV4.cjs');
 var chunkA3MEDSTQ_cjs = require('../chunk-A3MEDSTQ.cjs');
 require('../chunk-X6JQRPQN.cjs');
@@ -14,7 +14,7 @@ require('../chunk-QFIW5FJA.cjs');
 
 // src/plugins/all.ts
 function createAllPlugins() {
-  return [...chunkDDRW2SA3_cjs.createEssentialPlugins(), new chunkA3MEDSTQ_cjs.MathPlugin(), new chunkZPG5FMPQ_cjs.MermaidPlugin(), new chunk7BSQYD3N_cjs.EmojiPlugin()];
+  return [...chunkX5KXQPCN_cjs.createEssentialPlugins(), new chunkA3MEDSTQ_cjs.MathPlugin(), new chunkZPG5FMPQ_cjs.MermaidPlugin(), new chunk7BSQYD3N_cjs.EmojiPlugin()];
 }
 
 Object.defineProperty(exports, "EmojiPlugin", {

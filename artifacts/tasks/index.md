@@ -133,6 +133,7 @@ bootstrap, so entries before 2026-08-18 are summaries rather than full task reco
 
 | ID      | Task                                                                                                  | Shipped              |
 | ------- | ----------------------------------------------------------------------------------------------------- | -------------------- |
+| `C-033` | [Table caret geometry and scrolling](./completed/C-033-table-caret-geometry.md) | 2026-09-09 |
 | `C-031` | [Pluma interactions](./completed/C-031-pluma-interactions.md) | 2026-09-09 |
 | `C-032` | [Wrapped table cell blank-space clicks](./completed/C-032-wrapped-cell-pointer.md) | 2026-09-09 |
 | `C-030` | [Share in-flight Mermaid renders](./completed/C-030-share-inflight-mermaid-renders.md) | 2026-08-21 |

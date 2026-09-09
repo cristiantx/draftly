@@ -1238,7 +1238,7 @@ function pointerPosition(view, event) {
   if (cell && !cell.textContent?.trim()) {
     const from = view.posAtDOM(cell, 0);
     const to = view.posAtDOM(cell, cell.childNodes.length);
-    return Math.floor((from + to) / 2);
+    return state.EditorSelection.cursor(Math.floor((from + to) / 2), 1);
   }
   let x = event.clientX;
   let y = event.clientY;
@@ -1272,15 +1272,25 @@ function pointerPosition(view, event) {
   }
   const range = document2.caretRangeFromPoint(x, y);
   if (range && view.contentDOM.contains(range.startContainer) && (!cell || cell.contains(range.startContainer))) {
-    return view.posAtDOM(range.startContainer, range.startOffset);
+    let assoc = 1;
+    if (range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+      const before = document2.createRange();
+      before.setStart(range.startContainer, range.startOffset - 1);
+      before.setEnd(range.startContainer, range.startOffset);
+      if (Array.from(before.getClientRects()).some((rect) => rect.height && y >= rect.top && y <= rect.bottom)) {
+        assoc = -1;
+      }
+    }
+    return state.EditorSelection.cursor(view.posAtDOM(range.startContainer, range.startOffset), assoc);
   }
   if (cell && view.contentDOM.contains(cell)) {
     const rect = cell.getBoundingClientRect();
     const end = event.clientX > (rect.left + rect.right) / 2;
-    return view.posAtDOM(cell, end ? cell.childNodes.length : 0);
+    return state.EditorSelection.cursor(view.posAtDOM(cell, end ? cell.childNodes.length : 0), end ? -1 : 1);
   }
   try {
-    return view.posAtCoords({ x: event.clientX, y: event.clientY });
+    const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    return position === null ? null : state.EditorSelection.cursor(position);
   } catch {
     return null;
   }
@@ -1298,12 +1308,12 @@ var tablePointerSelection = state.Prec.highest(
     const initialY = event.clientY;
     const granularity = Math.min(event.detail, 3);
     const rangeAt = (position) => {
-      if (granularity === 2) return view.state.wordAt(position) ?? state.EditorSelection.cursor(position);
+      if (granularity === 2) return view.state.wordAt(position.head) ?? position;
       if (granularity === 3) {
-        const line = view.state.doc.lineAt(position);
+        const line = view.state.doc.lineAt(position.head);
         return state.EditorSelection.range(line.from, line.to);
       }
-      return state.EditorSelection.cursor(position);
+      return position;
     };
     return {
       get(current, extend, multiple) {
@@ -1311,14 +1321,14 @@ var tablePointerSelection = state.Prec.highest(
         const position = moved ? pointerPosition(view, current) ?? start : start;
         const first = rangeAt(start);
         const last = rangeAt(position);
-        const anchor = extend ? original.main.anchor : position < start ? first.to : first.from;
-        const head = position < start ? last.from : last.to;
-        const selection = state.EditorSelection.range(anchor, head);
+        const anchor = extend ? original.main.anchor : position.head < start.head ? first.to : first.from;
+        const head = position.head < start.head ? last.from : last.to;
+        const selection = anchor === head ? state.EditorSelection.cursor(head, last.assoc) : state.EditorSelection.range(anchor, head);
         return multiple ? original.addRange(selection) : state.EditorSelection.create([selection]);
       },
       update(update) {
         if (update.docChanged) {
-          start = update.changes.mapPos(start);
+          start = start.map(update.changes);
           original = original.map(update.changes);
         }
       }
@@ -2036,9 +2046,11 @@ var TablePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
       }
     ];
   }
-  /** Schedules an initial normalization pass once the view is ready. */
+  /** Reactivates deferred repairs and initial normalization when the view plugin starts. */
   onViewReady(view) {
+    this.destroyedViews.delete(view);
     if (this.options.normalizeOnOpen !== false) this.scheduleNormalization(view);
+    this.scheduleSelectionRepair(view);
   }
   /** Re-schedules normalization after user-driven document changes. */
   /**
@@ -2054,11 +2066,12 @@ var TablePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
     if (this.pendingPaddingView === view) this.pendingPaddingView = null;
     if (this.pendingSelectionRepairView === view) this.pendingSelectionRepairView = null;
   }
+  /** Repairs mapped carets after edits as well as explicit selections and completed parses. */
   onViewUpdate(update) {
     if (this.options.normalizeOnChange !== false && update.docChanged && !update.transactions.some((transaction) => transaction.annotation(normalizeAnnotation))) {
       this.schedulePadding(update.view);
     }
-    if (update.selectionSet && !update.transactions.some((transaction) => transaction.annotation(repairSelectionAnnotation))) {
+    if ((update.selectionSet || update.docChanged || language.syntaxTree(update.startState) !== language.syntaxTree(update.state)) && !update.transactions.some((transaction) => transaction.annotation(repairSelectionAnnotation))) {
       this.scheduleSelectionRepair(update.view);
     }
   }
@@ -2395,25 +2408,26 @@ var TablePlugin = class extends chunk3TJPHTNQ_cjs.DecorationPlugin {
   }
   /** Repairs carets that land in hidden table markup instead of editable cell content. */
   ensureTableSelection(view) {
-    const selection = view.state.selection.main;
-    if (!selection.empty) {
-      return;
-    }
-    const tableInfo = getTableInfoAtPosition(view.state, selection.head);
-    if (!tableInfo) {
-      return;
-    }
-    const cell = findCellAtPosition(tableInfo, selection.head);
-    if (!cell) {
-      return;
-    }
-    const anchor = clampCellPosition(cell, selection.head);
-    if (anchor === selection.head) {
-      return;
-    }
+    let changed = false;
+    let tableInfo = null;
+    const ranges = view.state.selection.ranges.map((selection) => {
+      if (!selection.empty) return selection;
+      if (!tableInfo || selection.head < tableInfo.from || selection.head > tableInfo.to) {
+        tableInfo = getTableInfoAtPosition(view.state, selection.head);
+      }
+      const cell = tableInfo && findCellAtPosition(tableInfo, selection.head);
+      if (!cell) return selection;
+      const anchor = clampCellPosition(cell, selection.head);
+      const assoc = anchor === cell.contentFrom ? 1 : anchor === cell.contentTo ? -1 : selection.assoc;
+      if (anchor === selection.head && assoc === selection.assoc) return selection;
+      changed = true;
+      return state.EditorSelection.cursor(anchor, assoc, selection.bidiLevel ?? void 0, selection.goalColumn);
+    });
+    if (!changed) return;
     view.dispatch({
-      selection: { anchor },
-      annotations: repairSelectionAnnotation.of(true),
+      selection: state.EditorSelection.create(ranges, view.state.selection.mainIndex),
+      // Geometry repairs must not split a continuous typing group in undo history.
+      annotations: [repairSelectionAnnotation.of(true), state.Transaction.addToHistory.of(false)],
       scrollIntoView: true
     });
   }
@@ -4902,5 +4916,5 @@ exports.ParagraphPlugin = ParagraphPlugin;
 exports.QuotePlugin = QuotePlugin;
 exports.TablePlugin = TablePlugin;
 exports.createEssentialPlugins = createEssentialPlugins;
-//# sourceMappingURL=chunk-DDRW2SA3.cjs.map
-//# sourceMappingURL=chunk-DDRW2SA3.cjs.map
+//# sourceMappingURL=chunk-X5KXQPCN.cjs.map
+//# sourceMappingURL=chunk-X5KXQPCN.cjs.map

@@ -1,4 +1,13 @@
-import { Annotation, type EditorState, type Extension, Prec, type Range, RangeSet } from "@codemirror/state";
+import {
+  Annotation,
+  EditorSelection,
+  type EditorState,
+  type Extension,
+  Prec,
+  type Range,
+  RangeSet,
+  Transaction,
+} from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { BlockWrapper, Decoration, EditorView, type KeyBinding, WidgetType, keymap } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
@@ -957,9 +966,13 @@ export class TablePlugin extends DecorationPlugin {
     ];
   }
 
-  /** Schedules an initial normalization pass once the view is ready. */
+  /** Reactivates deferred repairs and initial normalization when the view plugin starts. */
   override onViewReady(view: EditorView): void {
+    // setState() recreates view plugins on the same EditorView. A revived plugin
+    // must be able to schedule repairs after its previous instance was destroyed.
+    this.destroyedViews.delete(view);
     if (this.options.normalizeOnOpen !== false) this.scheduleNormalization(view);
+    this.scheduleSelectionRepair(view);
   }
 
   /** Re-schedules normalization after user-driven document changes. */
@@ -978,6 +991,7 @@ export class TablePlugin extends DecorationPlugin {
     if (this.pendingSelectionRepairView === view) this.pendingSelectionRepairView = null;
   }
 
+  /** Repairs mapped carets after edits as well as explicit selections and completed parses. */
   override onViewUpdate(update: import("@codemirror/view").ViewUpdate): void {
     if (
       this.options.normalizeOnChange !== false &&
@@ -988,7 +1002,7 @@ export class TablePlugin extends DecorationPlugin {
     }
 
     if (
-      update.selectionSet &&
+      (update.selectionSet || update.docChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) &&
       !update.transactions.some((transaction) => transaction.annotation(repairSelectionAnnotation))
     ) {
       this.scheduleSelectionRepair(update.view);
@@ -1408,29 +1422,30 @@ export class TablePlugin extends DecorationPlugin {
 
   /** Repairs carets that land in hidden table markup instead of editable cell content. */
   private ensureTableSelection(view: EditorView): void {
-    const selection = view.state.selection.main;
-    if (!selection.empty) {
-      return;
-    }
+    let changed = false;
+    let tableInfo: TableInfo | null = null;
+    const ranges = view.state.selection.ranges.map((selection) => {
+      if (!selection.empty) return selection;
+      if (!tableInfo || selection.head < tableInfo.from || selection.head > tableInfo.to) {
+        tableInfo = getTableInfoAtPosition(view.state, selection.head);
+      }
+      const cell = tableInfo && findCellAtPosition(tableInfo, selection.head);
+      if (!cell) return selection;
 
-    const tableInfo = getTableInfoAtPosition(view.state, selection.head);
-    if (!tableInfo) {
-      return;
-    }
-
-    const cell = findCellAtPosition(tableInfo, selection.head);
-    if (!cell) {
-      return;
-    }
-
-    const anchor = clampCellPosition(cell, selection.head);
-    if (anchor === selection.head) {
-      return;
-    }
+      const anchor = clampCellPosition(cell, selection.head);
+      // A valid source offset can still resolve to hidden padding. Typing and
+      // keyboard commands commonly create a cursor with no visual association.
+      const assoc = anchor === cell.contentFrom ? 1 : anchor === cell.contentTo ? -1 : selection.assoc;
+      if (anchor === selection.head && assoc === selection.assoc) return selection;
+      changed = true;
+      return EditorSelection.cursor(anchor, assoc, selection.bidiLevel ?? undefined, selection.goalColumn);
+    });
+    if (!changed) return;
 
     view.dispatch({
-      selection: { anchor },
-      annotations: repairSelectionAnnotation.of(true),
+      selection: EditorSelection.create(ranges, view.state.selection.mainIndex),
+      // Geometry repairs must not split a continuous typing group in undo history.
+      annotations: [repairSelectionAnnotation.of(true), Transaction.addToHistory.of(false)],
       scrollIntoView: true,
     });
   }

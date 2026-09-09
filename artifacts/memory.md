@@ -1,6 +1,6 @@
 # Agent Memory
 
-> Last verified: 2026-09-09 · base commit `ef273c7` plus wrapped-cell pointer fix.
+> Last verified: 2026-09-09 · base commit `77e34a2` plus caret geometry repair.
 
 > Cross-session memory for agents working on Draftly.
 > Append newest sessions at the top of the log. Keep entries short and durable — record
@@ -47,6 +47,17 @@ Distilled from all sessions. Highest-value context, kept short deliberately.
   `base` **plus** its framework layer — `base` is not implied by the others.
 
 ### Traps that have cost time
+
+- **Correct table source insertion does not prove correct caret geometry.** At a cell's
+  content end, association 0 can resolve to a zero rectangle and +1 to a zero-height
+  table edge; -1 resolves to the visible glyph. The same bad rectangle drives typing
+  scroll requests. Assert actual cursor rectangles and scroll offsets after clicks AND
+  typing. Preserve association across mouse gestures and repair it after editing commands.
+  Mark repair transactions `addToHistory: false` so they do not split typing undo groups.
+  `setState()` reinitializes plugins on the same EditorView: clear the teardown WeakSet
+  in `onViewReady`, or every subsequent deferred repair silently bails out. Some native
+  input edits only map selection; schedule repairs on document and syntax-tree changes too.
+
 
 - **Table pointer regression tests must click blank line tails, not only glyphs.**
   Native glyph clicks and left-padding clicks passed while a short last line still sent

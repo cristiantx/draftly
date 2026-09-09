@@ -1,6 +1,6 @@
 import { EmojiPlugin } from '../chunk-EXLBMIGJ.js';
 export { EmojiPlugin } from '../chunk-EXLBMIGJ.js';
-import { createEssentialPlugins } from '../chunk-XZ4AWGRF.js';
+import { createEssentialPlugins } from '../chunk-7NRPIYQ3.js';
 import '../chunk-LB72KTUD.js';
 import { MathPlugin } from '../chunk-UVWPHNAA.js';
 export { MathPlugin, latexHighlightTags } from '../chunk-UVWPHNAA.js';

@@ -6,16 +6,16 @@ import { EditorView } from "@codemirror/view";
  * Ask the browser which text was hit, then map that DOM boundary to source.
  * @param view The editor containing the gesture.
  * @param event The current pointer coordinates.
- * @returns A source offset, or null when no editable boundary was hit.
+ * @returns A source caret with its visual side, or null when no editable boundary was hit.
  */
-function pointerPosition(view: EditorView, event: MouseEvent): number | null {
+function pointerPosition(view: EditorView, event: MouseEvent): SelectionRange | null {
   const document = view.contentDOM.ownerDocument;
   const hit = document.elementFromPoint(event.clientX, event.clientY);
   const cell = hit?.closest(".cm-draftly-table-cell");
   if (cell && !cell.textContent?.trim()) {
     const from = view.posAtDOM(cell, 0);
     const to = view.posAtDOM(cell, cell.childNodes.length);
-    return Math.floor((from + to) / 2);
+    return EditorSelection.cursor(Math.floor((from + to) / 2), 1);
   }
   let x = event.clientX;
   let y = event.clientY;
@@ -51,15 +51,27 @@ function pointerPosition(view: EditorView, event: MouseEvent): number | null {
   }
   const range = document.caretRangeFromPoint(x, y);
   if (range && view.contentDOM.contains(range.startContainer) && (!cell || cell.contains(range.startContainer))) {
-    return view.posAtDOM(range.startContainer, range.startOffset);
+    let assoc = 1;
+    if (range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+      const before = document.createRange();
+      before.setStart(range.startContainer, range.startOffset - 1);
+      before.setEnd(range.startContainer, range.startOffset);
+      // Keep a line-tail caret beside the preceding glyph, not the next wrapped
+      // line or hidden cell padding. At a wrapped line's start, use the next glyph.
+      if (Array.from(before.getClientRects()).some((rect) => rect.height && y >= rect.top && y <= rect.bottom)) {
+        assoc = -1;
+      }
+    }
+    return EditorSelection.cursor(view.posAtDOM(range.startContainer, range.startOffset), assoc);
   }
   if (cell && view.contentDOM.contains(cell)) {
     const rect = cell.getBoundingClientRect();
     const end = event.clientX > (rect.left + rect.right) / 2;
-    return view.posAtDOM(cell, end ? cell.childNodes.length : 0);
+    return EditorSelection.cursor(view.posAtDOM(cell, end ? cell.childNodes.length : 0), end ? -1 : 1);
   }
   try {
-    return view.posAtCoords({ x: event.clientX, y: event.clientY });
+    const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    return position === null ? null : EditorSelection.cursor(position);
   } catch {
     return null;
   }
@@ -86,13 +98,13 @@ export const tablePointerSelection = Prec.highest(
     const initialX = event.clientX;
     const initialY = event.clientY;
     const granularity = Math.min(event.detail, 3);
-    const rangeAt = (position: number): SelectionRange => {
-      if (granularity === 2) return view.state.wordAt(position) ?? EditorSelection.cursor(position);
+    const rangeAt = (position: SelectionRange): SelectionRange => {
+      if (granularity === 2) return view.state.wordAt(position.head) ?? position;
       if (granularity === 3) {
-        const line = view.state.doc.lineAt(position);
+        const line = view.state.doc.lineAt(position.head);
         return EditorSelection.range(line.from, line.to);
       }
-      return EditorSelection.cursor(position);
+      return position;
     };
     return {
       get(current, extend, multiple) {
@@ -100,14 +112,15 @@ export const tablePointerSelection = Prec.highest(
         const position = moved ? (pointerPosition(view, current) ?? start) : start;
         const first = rangeAt(start);
         const last = rangeAt(position);
-        const anchor = extend ? original.main.anchor : position < start ? first.to : first.from;
-        const head = position < start ? last.from : last.to;
-        const selection = EditorSelection.range(anchor, head);
+        const anchor = extend ? original.main.anchor : position.head < start.head ? first.to : first.from;
+        const head = position.head < start.head ? last.from : last.to;
+        const selection =
+          anchor === head ? EditorSelection.cursor(head, last.assoc) : EditorSelection.range(anchor, head);
         return multiple ? original.addRange(selection) : EditorSelection.create([selection]);
       },
       update(update) {
         if (update.docChanged) {
-          start = update.changes.mapPos(start);
+          start = start.map(update.changes);
           original = original.map(update.changes);
         }
         // Reusing the initial DOM coordinates after a decoration update would hit a

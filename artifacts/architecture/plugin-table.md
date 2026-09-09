@@ -1,6 +1,6 @@
 # Table Plugin (deep dive)
 
-> Pointer hit-testing verified: 2026-09-09 · base commit `ef273c7` plus wrapped-cell pointer fix.
+> Pointer hit-testing verified: 2026-09-09 · base commit `77e34a2` plus caret geometry repair.
 > Other sections last verified: 2026-08-18 · commit `eae4434`
 > Source: `packages/draftly/src/plugins/table-plugin.ts` (1759 LOC) · plugin version `2.0.0`
 
@@ -219,6 +219,20 @@ vertical distance, then the nearest text rectangle horizontally. A combined Eucl
 distance is incorrect: a long line above can win over the short final line beside a click.
 CodeMirror owns gesture tracking, drag/Shift/multiple selections, and document-change
 mapping of gesture anchors. This path does not format or otherwise change Markdown.
+
+The pointer result also retains visual association. A preceding glyph on the clicked
+visual line gives association -1; a line start gives +1. Collapsed selections keep that
+association instead of recreating an unassociated source offset. This matters at hidden
+padding and at soft wraps even when the source position is already correct.
+
+Deferred selection repair clamps every collapsed range and associates cell starts with
+the following text (+1), cell ends with preceding text (-1). It leaves selections and
+valid interior positions intact, preserves the main range, and replaces pending scroll
+targets with corrected caret geometry. The existing repair annotation prevents recursion;
+`Transaction.addToHistory.of(false)` keeps repairs out of typing undo groups. Repairs
+also run after document and syntax-tree changes. `onViewReady` clears the teardown flag
+for `setState()` reinitialization on an existing EditorView and schedules an initial repair.
+
 
 ### Source text
 

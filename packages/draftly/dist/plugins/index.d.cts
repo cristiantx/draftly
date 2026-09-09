@@ -268,7 +268,7 @@ declare class TablePlugin extends DecorationPlugin {
     getShortcuts(): DescribedKeyBinding[];
     /** Builds the high-priority key bindings used inside tables. */
     private buildTableKeymap;
-    /** Schedules an initial normalization pass once the view is ready. */
+    /** Reactivates deferred repairs and initial normalization when the view plugin starts. */
     onViewReady(view: EditorView): void;
     /** Re-schedules normalization after user-driven document changes. */
     /**
@@ -279,6 +279,7 @@ declare class TablePlugin extends DecorationPlugin {
      * into a dead editor.
      */
     onViewDestroy(view: EditorView): void;
+    /** Repairs mapped carets after edits as well as explicit selections and completed parses. */
     onViewUpdate(update: _codemirror_view.ViewUpdate): void;
     /** Intercepts table-specific DOM key handling before browser defaults run. */
     private handleDomKeydown;
